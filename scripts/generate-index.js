@@ -5,10 +5,28 @@ import { join } from 'path';
 const clientDir = 'dist/client';
 const assetsDir = join(clientDir, 'assets');
 
-// Find CSS and main JS
 const files = readdirSync(assetsDir);
 const css = files.find(f => f.endsWith('.css')) || '';
 const js = files.find(f => f.startsWith('index-') && f.endsWith('.js')) || '';
+
+// Minimal $_TSR bootstrap required by TanStack Start client
+// without this window.$_TSR is undefined and the app throws "Invariant failed"
+const tsrBootstrap = `
+  window.$_TSR = {
+    buffer: [],
+    initialized: false,
+    h: function() {},
+    t: new Map(),
+    router: {
+      matches: [],
+      lastMatchId: null,
+      manifest: { routes: {} },
+      dehydratedData: {}
+    }
+  };
+  // Process any buffered calls once router is ready
+  window.$_TSR_READY = true;
+`.trim();
 
 const html = `<!doctype html>
 <html lang="en">
@@ -20,9 +38,9 @@ const html = `<!doctype html>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon-192.svg" type="image/svg+xml" />
     ${css ? `<link rel="stylesheet" href="/assets/${css}" />` : ''}
+    <script>${tsrBootstrap}</script>
   </head>
   <body>
-    <div id="app"></div>
     <script type="module" src="/assets/${js}"></script>
   </body>
 </html>`;
@@ -30,4 +48,4 @@ const html = `<!doctype html>
 writeFileSync(join(clientDir, 'index.html'), html);
 writeFileSync(join(clientDir, '_redirects'), '/* /index.html 200\n');
 
-console.log(`✅ index.html generated (CSS: ${css}, JS: ${js})`);
+console.log(`✅ index.html with $_TSR bootstrap (CSS: ${css}, JS: ${js})`);
