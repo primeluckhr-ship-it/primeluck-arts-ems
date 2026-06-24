@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -7,13 +7,22 @@ import { formatKES, getStatusColor } from "@/lib/pla";
 import { Plus, Search, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_app/students")({
-  component: StudentsPage,
-});
+export const Route = createFileRoute("/_app/students")({ component: StudentsPage });
+
+const TYPE_LABELS: Record<string, string> = {
+  junior: "Junior", teen: "Teen", adult: "Adult", institution: "Institution",
+};
+const TYPE_COLORS: Record<string, string> = {
+  junior: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  teen: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  adult: "bg-green-500/15 text-green-400 border-green-500/30",
+  institution: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+};
 
 function StudentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const qc = useQueryClient();
@@ -36,17 +45,37 @@ function StudentsPage() {
     const q = search.toLowerCase();
     return (data ?? []).filter((s: any) =>
       (statusFilter === "all" || s.status === statusFilter) &&
+      (typeFilter === "all" || s.student_type === typeFilter) &&
       (!q || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(q))
     );
-  }, [data, search, statusFilter]);
+  }, [data, search, statusFilter, typeFilter]);
+
+  // Counts per type for summary bar
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { junior: 0, teen: 0, adult: 0, institution: 0 };
+    (data ?? []).forEach((s: any) => { if (c[s.student_type] !== undefined) c[s.student_type]++; });
+    return c;
+  }, [data]);
 
   return (
     <div className="space-y-4">
+      {/* Type summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Object.entries(TYPE_LABELS).map(([type, label]) => (
+          <button key={type} onClick={() => setTypeFilter(typeFilter === type ? "all" : type)}
+            className={`rounded-xl border p-3 text-left transition-all ${typeFilter === type ? "ring-2 ring-accent" : ""} ${TYPE_COLORS[type]}`}>
+            <div className="text-2xl font-bold">{counts[type]}</div>
+            <div className="text-xs font-medium mt-0.5">{label}s</div>
+          </button>
+        ))}
+      </div>
+
       <PageCard
         title="Students"
-        subtitle={`${data?.length ?? 0} total`}
+        subtitle={`${filtered.length} of ${data?.length ?? 0}`}
         action={
-          <button onClick={() => { setEditing(null); setOpen(true); }} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
+          <button onClick={() => { setEditing(null); setOpen(true); }}
+            className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
             <Plus className="size-4" /> Add Student
           </button>
         }
@@ -54,14 +83,20 @@ function StudentsPage() {
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+            <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or admission #…"
-              className="w-full bg-background border border-input rounded-md pl-9 pr-3 py-2 text-sm"
-            />
+              className="w-full bg-background border border-input rounded-md pl-9 pr-3 py-2 text-sm" />
           </div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+            className="bg-background border border-input rounded-md px-3 py-2 text-sm">
+            <option value="all">All types</option>
+            <option value="junior">Juniors</option>
+            <option value="teen">Teens</option>
+            <option value="adult">Adults</option>
+            <option value="institution">Institutions</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-background border border-input rounded-md px-3 py-2 text-sm">
             <option value="all">All statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -71,23 +106,34 @@ function StudentsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-muted-foreground border-b border-border">
-              <th className="py-2 pr-2">Admission #</th><th className="py-2 pr-2">Name</th><th className="py-2 pr-2">Level</th><th className="py-2 pr-2">Status</th><th className="py-2 text-right pr-2">Balance</th><th className="py-2 w-10"></th>
+              <th className="py-2 pr-3">Admission #</th>
+              <th className="py-2 pr-3">Name</th>
+              <th className="py-2 pr-3">Type</th>
+              <th className="py-2 pr-3">Level</th>
+              <th className="py-2 pr-3">Status</th>
+              <th className="py-2 text-right pr-3">Balance</th>
+              <th className="py-2 w-10"></th>
             </tr></thead>
             <tbody>
-              {isLoading && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
+              {isLoading && <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
               {filtered.map((s: any) => (
                 <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
-                  <td className="py-2.5 pr-2 font-mono text-xs"><Link to="/students/$id" params={{ id: s.id }} className="text-accent hover:underline">{s.admission_number}</Link></td>
-                  <td className="py-2.5 pr-2 font-medium">{s.first_name} {s.last_name}</td>
-                  <td className="py-2.5 pr-2 text-muted-foreground">{s.skill_level || "—"}</td>
-                  <td className="py-2.5 pr-2"><Badge className={getStatusColor(s.status)}>{s.status}</Badge></td>
-                  <td className="py-2.5 pr-2 text-right font-semibold">{formatKES(s.outstanding)}</td>
+                  <td className="py-2.5 pr-3 font-mono text-xs">
+                    <Link to="/students/$id" params={{ id: s.id }} className="text-accent hover:underline">{s.admission_number}</Link>
+                  </td>
+                  <td className="py-2.5 pr-3 font-medium">{s.first_name} {s.last_name}</td>
+                  <td className="py-2.5 pr-3">
+                    <Badge className={TYPE_COLORS[s.student_type ?? "adult"]}>{TYPE_LABELS[s.student_type ?? "adult"]}</Badge>
+                  </td>
+                  <td className="py-2.5 pr-3 text-muted-foreground">{s.skill_level || "—"}</td>
+                  <td className="py-2.5 pr-3"><Badge className={getStatusColor(s.status)}>{s.status}</Badge></td>
+                  <td className="py-2.5 pr-3 text-right font-semibold">{formatKES(s.outstanding)}</td>
                   <td className="py-2.5">
                     <button onClick={() => { setEditing(s); setOpen(true); }} className="p-1.5 rounded hover:bg-muted"><Pencil className="size-4" /></button>
                   </td>
                 </tr>
               ))}
-              {!isLoading && !filtered.length && <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No students found</td></tr>}
+              {!isLoading && !filtered.length && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No students found</td></tr>}
             </tbody>
           </table>
         </div>
@@ -118,8 +164,16 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
     emergency_contact: initial?.emergency_contact ?? "",
     notes: initial?.notes ?? "",
     status: initial?.status ?? "active",
+    student_type: initial?.student_type ?? "adult",
   });
   const [saving, setSaving] = useState(false);
+
+  const { data: institutions } = useQuery({
+    queryKey: ["institutions-list"],
+    queryFn: async () => (await supabase.from("institutions").select("id,name").eq("is_active", true).order("name")).data ?? [],
+  });
+
+  const [institutionId, setInstitutionId] = useState(initial?.institution_id ?? "");
 
   async function suggest() {
     const { data } = await supabase.from("students").select("admission_number").order("admission_number", { ascending: false }).limit(1);
@@ -131,19 +185,18 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
   async function save() {
     setSaving(true);
     try {
+      const payload = { ...form, institution_id: institutionId || null };
       if (initial) {
-        const { error } = await supabase.from("students").update(form).eq("id", initial.id);
+        const { error } = await supabase.from("students").update(payload).eq("id", initial.id);
         if (error) throw error;
         toast.success("Student updated");
       } else {
-        const { error } = await supabase.from("students").insert(form);
+        const { error } = await supabase.from("students").insert(payload);
         if (error) throw error;
         toast.success("Student added");
       }
       onSaved();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally { setSaving(false); }
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
 
   return (
@@ -151,14 +204,36 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">{initial ? "Edit Student" : "Add Student"}</h2>
         <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Student Type" className="sm:col-span-2">
+            <div className="flex gap-2 flex-wrap">
+              {Object.entries(TYPE_LABELS).map(([type, label]) => (
+                <button key={type} type="button"
+                  onClick={() => setForm({ ...form, student_type: type })}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${form.student_type === type ? TYPE_COLORS[type] + " ring-2 ring-offset-1 ring-offset-card ring-current" : "border-border text-muted-foreground hover:border-accent"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          {form.student_type === "institution" && (
+            <Field label="Institution" className="sm:col-span-2">
+              <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}
+                className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+                <option value="">— Select institution —</option>
+                {(institutions ?? []).map((i: any) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label="Admission #">
             <div className="flex gap-2">
-              <input value={form.admission_number} onChange={(e) => setForm({ ...form, admission_number: e.target.value })} className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm" />
+              <input value={form.admission_number} onChange={(e) => setForm({ ...form, admission_number: e.target.value })}
+                className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm" />
               {!initial && <button type="button" onClick={suggest} className="text-xs bg-muted px-2 rounded">Auto</button>}
             </div>
           </Field>
           <Field label="Status">
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option>active</option><option>inactive</option><option>suspended</option>
             </select>
           </Field>
@@ -166,26 +241,32 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
           <Field label="Last name"><Input value={form.last_name} onChange={(v) => setForm({ ...form, last_name: v })} /></Field>
           <Field label="Date of birth"><Input type="date" value={form.date_of_birth} onChange={(v) => setForm({ ...form, date_of_birth: v })} /></Field>
           <Field label="Gender">
-            <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+            <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option value="">—</option><option>male</option><option>female</option><option>other</option>
             </select>
           </Field>
           <Field label="School"><Input value={form.school} onChange={(v) => setForm({ ...form, school: v })} /></Field>
           <Field label="Grade"><Input value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} /></Field>
           <Field label="Skill level">
-            <select value={form.skill_level} onChange={(e) => setForm({ ...form, skill_level: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+            <select value={form.skill_level} onChange={(e) => setForm({ ...form, skill_level: e.target.value })}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
             </select>
           </Field>
           <Field label="Enrollment date"><Input type="date" value={form.enrollment_date} onChange={(v) => setForm({ ...form, enrollment_date: v })} /></Field>
           <Field label="Emergency contact" className="sm:col-span-2"><Input value={form.emergency_contact} onChange={(v) => setForm({ ...form, emergency_contact: v })} /></Field>
           <Field label="Notes" className="sm:col-span-2">
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={3} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
           </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+          <button onClick={save} disabled={saving}
+            className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
     </div>

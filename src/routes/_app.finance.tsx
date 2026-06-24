@@ -83,7 +83,8 @@ function InvoicesTab() {
         </button>
       }
     >
-      <div className="flex flex-wrap gap-2 mb-4">
+      <TermlyGenerator onGenerated={() => qc.invalidateQueries({ queryKey: ["invoices-list"] })} />
+      <div className="flex flex-wrap gap-2 mb-4 mt-4">
         <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{format(new Date(2000, m - 1), "MMMM")}</option>)}
         </select>
@@ -342,6 +343,92 @@ function ArrearsTab() {
           </tbody>
         </table>
       </PageCard>
+    </div>
+  );
+}
+
+/* ─── TERMLY INVOICE GENERATOR (appended) ─── */
+export function TermlyGenerator({ onGenerated }: { onGenerated: () => void }) {
+  const [termId, setTermId] = useState("");
+  const [typeFilter, setTypeFilter] = useState("institution");
+  const [generating, setGenerating] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: terms } = useQuery({
+    queryKey: ["terms-list"],
+    queryFn: async () => (await supabase.from("terms").select("*").order("year").order("term_number")).data ?? [],
+  });
+
+  async function generate() {
+    if (!termId) { toast.error("Select a term first"); return; }
+    setGenerating(true);
+    try {
+      const term = (terms ?? []).find((t: any) => t.id === termId);
+      const { data: students } = await supabase.from("students")
+        .select("id,first_name,last_name,student_type")
+        .eq("status", "active")
+        .eq("student_type", typeFilter);
+
+      const { data: existing } = await supabase.from("invoices")
+        .select("student_id").eq("term_id", termId).eq("billing_type", "termly");
+      const existingIds = new Set((existing ?? []).map((e: any) => e.student_id));
+      const newOnes = (students ?? []).filter((s: any) => !existingIds.has(s.id));
+
+      if (!newOnes.length) { toast.info("All termly invoices already generated for this group"); return; }
+
+      const rows = await Promise.all(newOnes.map(async (s: any) => {
+        const { data: enr } = await supabase.from("course_enrollments")
+          .select("fee_override,courses(programs(term_fee,monthly_fee,billing_cycle))")
+          .eq("student_id", s.id);
+        const total = (enr ?? []).reduce((sum: number, e: any) => {
+          if (e.fee_override) return sum + Number(e.fee_override);
+          const prog = e.courses?.programs;
+          return sum + Number(prog?.billing_cycle === "termly" ? prog?.term_fee : (prog?.monthly_fee ?? 0) * 3);
+        }, 0);
+        const now = new Date();
+        return {
+          invoice_number: `TINV-${term?.year}-T${term?.term_number}-${Math.random().toString(36).slice(2,6).toUpperCase()}`,
+          student_id: s.id,
+          period_month: now.getMonth() + 1,
+          period_year: term?.year ?? now.getFullYear(),
+          issue_date: now.toISOString().slice(0, 10),
+          due_date: term?.start_date ?? now.toISOString().slice(0, 10),
+          subtotal: total, total_amount: total, amount_paid: 0, amount_outstanding: total,
+          status: "sent", billing_type: "termly", term_id: termId,
+        };
+      }));
+
+      const { error } = await supabase.from("invoices").insert(rows);
+      if (error) throw error;
+      toast.success(`Generated ${rows.length} termly invoices for ${term?.name}`);
+      qc.invalidateQueries({ queryKey: ["invoices-list"] });
+      onGenerated();
+    } catch (e: any) { toast.error(e.message); } finally { setGenerating(false); }
+  }
+
+  return (
+    <div className="border border-accent/30 rounded-xl bg-accent/5 p-4 space-y-3">
+      <div className="text-sm font-semibold text-accent">Termly Invoice Generator</div>
+      <div className="flex flex-wrap gap-2">
+        <select value={termId} onChange={(e) => setTermId(e.target.value)}
+          className="bg-background border border-input rounded-md px-3 py-2 text-sm flex-1 min-w-[180px]">
+          <option value="">— Select term —</option>
+          {(terms ?? []).map((t: any) => (
+            <option key={t.id} value={t.id}>{t.name}{t.is_current ? " ★" : ""}</option>
+          ))}
+        </select>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+          className="bg-background border border-input rounded-md px-3 py-2 text-sm">
+          <option value="institution">Institutions</option>
+          <option value="junior">Juniors</option>
+          <option value="teen">Teens</option>
+          <option value="adult">Adults</option>
+        </select>
+        <button onClick={generate} disabled={generating || !termId}
+          className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-4 py-2 text-sm font-medium disabled:opacity-50">
+          {generating ? "Generating…" : "Generate Termly Invoices"}
+        </button>
+      </div>
     </div>
   );
 }

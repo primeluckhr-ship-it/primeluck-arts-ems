@@ -2,100 +2,177 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { PageCard } from "@/components/app-shell";
+import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES } from "@/lib/pla";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
 
-export const Route = createFileRoute("/_app/programs")({
-  component: ProgramsPage,
-});
+export const Route = createFileRoute("/_app/programs")({ component: ProgramsPage });
 
 function ProgramsPage() {
-  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const qc = useQueryClient();
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["programs-list"],
     queryFn: async () => (await supabase.from("programs").select("*").order("name")).data ?? [],
   });
 
   return (
-    <PageCard
-      title="Programs"
-      subtitle={`${data?.length ?? 0} programs`}
-      action={<button onClick={() => { setEditing(null); setOpen(true); }} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4" /> Add</button>}
-    >
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {(data ?? []).map((p: any) => (
-          <div key={p.id} className="border border-border rounded-lg p-4 bg-background/30">
-            <div className="flex items-start justify-between mb-2">
-              <div className="font-semibold">{p.name}</div>
-              <button onClick={() => { setEditing(p); setOpen(true); }} className="p-1.5 rounded hover:bg-muted"><Pencil className="size-4" /></button>
-            </div>
-            {p.description && <div className="text-xs text-muted-foreground mb-3">{p.description}</div>}
-            <div className="text-lg font-bold text-accent">{formatKES(p.monthly_fee)}/mo</div>
-            <div className="text-xs text-muted-foreground mt-1">{p.duration_months} months · {p.sessions_per_week}/wk · {p.skill_level}</div>
-          </div>
-        ))}
-        {!data?.length && <div className="md:col-span-3 text-center py-8 text-muted-foreground">No programs.</div>}
-      </div>
+    <div className="space-y-4">
+      <PageCard
+        title="Programs"
+        subtitle="Art programs offered at the academy"
+        action={
+          <button onClick={() => { setEditing(null); setOpen(true); }}
+            className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
+            <Plus className="size-4" /> Add Program
+          </button>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-muted-foreground border-b border-border">
+              <th className="py-2 pr-3">Name</th>
+              <th className="py-2 pr-3">Category</th>
+              <th className="py-2 pr-3">Billing</th>
+              <th className="py-2 pr-3 text-right">Monthly Fee</th>
+              <th className="py-2 pr-3 text-right">Term Fee</th>
+              <th className="py-2 pr-3">Status</th>
+              <th className="py-2 w-10"></th>
+            </tr></thead>
+            <tbody>
+              {isLoading && <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
+              {(data ?? []).map((p: any) => (
+                <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
+                  <td className="py-2.5 pr-3 font-medium">{p.name}</td>
+                  <td className="py-2.5 pr-3 text-muted-foreground">{p.category || "—"}</td>
+                  <td className="py-2.5 pr-3">
+                    <Badge className={p.billing_cycle === "termly"
+                      ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                      : "bg-blue-500/15 text-blue-400 border-blue-500/30"}>
+                      {p.billing_cycle ?? "monthly"}
+                    </Badge>
+                  </td>
+                  <td className="py-2.5 pr-3 text-right">{p.monthly_fee ? formatKES(p.monthly_fee) : "—"}</td>
+                  <td className="py-2.5 pr-3 text-right">{p.term_fee ? formatKES(p.term_fee) : "—"}</td>
+                  <td className="py-2.5 pr-3">
+                    <Badge className={p.is_active ? "bg-success/15 text-success border-success/30" : "bg-muted text-muted-foreground border-border"}>
+                      {p.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className="py-2.5">
+                    <button onClick={() => { setEditing(p); setOpen(true); }} className="p-1.5 rounded hover:bg-muted"><Pencil className="size-4" /></button>
+                  </td>
+                </tr>
+              ))}
+              {!isLoading && !data?.length && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No programs yet</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </PageCard>
 
-      {open && <ProgramForm initial={editing} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["programs-list"] }); }} />}
-    </PageCard>
+      {open && (
+        <ProgramForm
+          initial={editing}
+          onClose={() => setOpen(false)}
+          onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["programs-list"] }); }}
+        />
+      )}
+    </div>
   );
 }
 
 function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: initial?.name ?? "",
+    category: initial?.category ?? "",
     description: initial?.description ?? "",
-    skill_level: initial?.skill_level ?? "Beginner",
-    duration_months: initial?.duration_months ?? 3,
-    sessions_per_week: initial?.sessions_per_week ?? 2,
-    monthly_fee: initial?.monthly_fee ?? 0,
-    registration_fee: initial?.registration_fee ?? 0,
+    billing_cycle: initial?.billing_cycle ?? "monthly",
+    monthly_fee: initial?.monthly_fee ?? "",
+    term_fee: initial?.term_fee ?? "",
+    max_students: initial?.max_students ?? "",
+    is_active: initial?.is_active ?? true,
   });
   const [saving, setSaving] = useState(false);
+
   async function save() {
     setSaving(true);
     try {
       const payload = {
         ...form,
-        duration_months: Number(form.duration_months),
-        sessions_per_week: Number(form.sessions_per_week),
-        monthly_fee: Number(form.monthly_fee),
-        registration_fee: Number(form.registration_fee),
+        monthly_fee: form.billing_cycle === "monthly" ? (Number(form.monthly_fee) || null) : null,
+        term_fee: form.billing_cycle === "termly" ? (Number(form.term_fee) || null) : null,
+        max_students: Number(form.max_students) || null,
       };
-      if (initial) await supabase.from("programs").update(payload).eq("id", initial.id).throwOnError();
-      else await supabase.from("programs").insert(payload).throwOnError();
-      toast.success("Saved"); onSaved();
+      if (initial) {
+        const { error } = await supabase.from("programs").update(payload).eq("id", initial.id);
+        if (error) throw error;
+        toast.success("Program updated");
+      } else {
+        const { error } = await supabase.from("programs").insert(payload);
+        if (error) throw error;
+        toast.success("Program created");
+      }
+      onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6">
-        <h2 className="text-lg font-semibold mb-4">{initial ? "Edit" : "Add"} Program</h2>
+      <div className="bg-card border border-border rounded-2xl w-full max-w-lg p-6">
+        <h2 className="text-lg font-semibold mb-4">{initial ? "Edit Program" : "New Program"}</h2>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Field label="Name" className="sm:col-span-2"><Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} /></Field>
+          <Field label="Program name" className="sm:col-span-2"><Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} /></Field>
+          <Field label="Category"><Input value={form.category} onChange={(v) => setForm({ ...form, category: v })} placeholder="e.g. Visual Arts" /></Field>
+          <Field label="Max students"><Input type="number" value={form.max_students} onChange={(v) => setForm({ ...form, max_students: v })} /></Field>
+
+          <Field label="Billing cycle" className="sm:col-span-2">
+            <div className="flex gap-2">
+              {["monthly", "termly"].map((cycle) => (
+                <button key={cycle} type="button"
+                  onClick={() => setForm({ ...form, billing_cycle: cycle })}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium border transition-all capitalize ${form.billing_cycle === cycle ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground hover:border-accent"}`}>
+                  {cycle}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          {form.billing_cycle === "monthly" && (
+            <Field label="Monthly fee (KES)" className="sm:col-span-2">
+              <Input type="number" value={form.monthly_fee} onChange={(v) => setForm({ ...form, monthly_fee: v })} placeholder="e.g. 4500" />
+            </Field>
+          )}
+          {form.billing_cycle === "termly" && (
+            <Field label="Term fee (KES)" className="sm:col-span-2">
+              <Input type="number" value={form.term_fee} onChange={(v) => setForm({ ...form, term_fee: v })} placeholder="e.g. 12000" />
+            </Field>
+          )}
+
           <Field label="Description" className="sm:col-span-2">
-            <textarea value={form.description} rows={2} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
+            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={2} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
           </Field>
-          <Field label="Level">
-            <select value={form.skill_level} onChange={(e) => setForm({ ...form, skill_level: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-              <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
-            </select>
+          <Field label="Status" className="sm:col-span-2">
+            <div className="flex gap-2">
+              {[true, false].map((v) => (
+                <button key={String(v)} type="button" onClick={() => setForm({ ...form, is_active: v })}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium border transition-all ${form.is_active === v ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground"}`}>
+                  {v ? "Active" : "Inactive"}
+                </button>
+              ))}
+            </div>
           </Field>
-          <Field label="Duration (months)"><Input type="number" value={String(form.duration_months)} onChange={(v) => setForm({ ...form, duration_months: Number(v) })} /></Field>
-          <Field label="Sessions / week"><Input type="number" value={String(form.sessions_per_week)} onChange={(v) => setForm({ ...form, sessions_per_week: Number(v) })} /></Field>
-          <Field label="Monthly fee (KES)"><Input type="number" value={String(form.monthly_fee)} onChange={(v) => setForm({ ...form, monthly_fee: Number(v) })} /></Field>
-          <Field label="Registration fee (KES)"><Input type="number" value={String(form.registration_fee)} onChange={(v) => setForm({ ...form, registration_fee: Number(v) })} /></Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">Save</button>
+          <button onClick={save} disabled={saving}
+            className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
     </div>
