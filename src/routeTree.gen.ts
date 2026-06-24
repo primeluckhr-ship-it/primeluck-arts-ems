@@ -29,7 +29,26 @@ import { Route as AppAssessmentsRouteImport } from './routes/_app.assessments'
 import { Route as AppAnnouncementsRouteImport } from './routes/_app.announcements'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AppStudentsIdRouteImport } from './routes/_app.students.$id'
+import { Route as AppProjectsRouteImport } from './routes/_app.projects'
+import { Route as AppLessonsRouteImport } from './routes/_app.lessons'
+import { Route as AppDiceInstitutionsRouteImport } from './routes/_app.dice-institutions'
 
+
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLessonsRoute = AppLessonsRouteImport.update({
+  id: '/lessons',
+  path: '/lessons',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDiceInstitutionsRoute = AppDiceInstitutionsRouteImport.update({
+  id: '/dice-institutions',
+  path: '/dice-institutions',
+  getParentRoute: () => AppRoute,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -418,6 +437,9 @@ interface AppStudentsRouteChildren {
 
 const AppStudentsRouteChildren: AppStudentsRouteChildren = {
   AppStudentsIdRoute: AppStudentsIdRoute,
+    AppProjectsRoute,
+    AppLessonsRoute,
+    AppDiceInstitutionsRoute,
 }
 
 const AppStudentsRouteWithChildren = AppStudentsRoute._addFileChildren(
@@ -446,6 +468,9 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
+    AppProjectsRoute,
+    AppLessonsRoute,
+    AppDiceInstitutionsRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppAttendanceRoute: AppAttendanceRoute,
