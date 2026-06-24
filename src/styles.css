@@ -97,3 +97,44 @@
   html, body, #root { background-color: var(--color-background); color: var(--color-foreground); min-height: 100vh; }
   body { font-family: 'Inter', system-ui, sans-serif; }
 }
+
+/* ── Dice Arts theme — black + orange ── */
+[data-brand="dice"] {
+  --background: oklch(0.07 0.005 240);         /* near pure black */
+  --foreground: oklch(0.97 0.005 240);
+  --card: oklch(0.12 0.008 240);               /* very dark card */
+  --card-foreground: oklch(0.97 0.005 240);
+  --popover: oklch(0.12 0.008 240);
+  --popover-foreground: oklch(0.97 0.005 240);
+  --primary: oklch(0.15 0.008 240);            /* dark primary */
+  --primary-foreground: oklch(0.97 0.005 240);
+  --secondary: oklch(0.18 0.008 240);
+  --secondary-foreground: oklch(0.97 0.005 240);
+  --muted: oklch(0.20 0.008 240);
+  --muted-foreground: oklch(0.68 0.02 240);
+  --accent: oklch(0.72 0.20 45);              /* vivid orange #f97316 */
+  --accent-foreground: oklch(0.10 0.005 240);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.72 0.20 45);
+  --gold: oklch(0.72 0.20 45);
+  --gold-foreground: oklch(0.10 0.005 240);
+  --success: oklch(0.70 0.16 165);
+  --warning: oklch(0.78 0.16 75);
+  --danger: oklch(0.66 0.23 25);
+  --sidebar: oklch(0.09 0.005 240);            /* very dark sidebar */
+  --sidebar-foreground: oklch(0.94 0.01 240);
+  --sidebar-primary: oklch(0.72 0.20 45);      /* orange */
+  --sidebar-primary-foreground: oklch(0.10 0.005 240);
+  --sidebar-accent: oklch(0.17 0.008 240);
+  --sidebar-accent-foreground: oklch(0.97 0.005 240);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.72 0.20 45);
+  --chart-1: oklch(0.72 0.20 45);             /* orange */
+  --chart-2: oklch(0.65 0.22 155);            /* green */
+  --chart-3: oklch(0.65 0.20 290);            /* purple */
+  --chart-4: oklch(0.78 0.18 70);             /* yellow */
+  --chart-5: oklch(0.66 0.23 25);             /* red */
+}

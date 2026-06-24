@@ -29,6 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
+      try {
+        const tmp = raw ? JSON.parse(raw) : null;
+        if (tmp?.branch_id) document.documentElement.setAttribute("data-brand", tmp.branch_id === "dice-arts-nairobi" ? "dice" : "pla");
+      } catch {}
       if (raw) setUser(JSON.parse(raw));
     } catch {}
     setLoading(false);
@@ -55,12 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       linked_entity_id: data.linked_entity_id,
     };
     localStorage.setItem(KEY, JSON.stringify(su));
+      document.documentElement.setAttribute("data-brand", su.branch_id === "dice-arts-nairobi" ? "dice" : "pla");
     setUser(su);
     return su;
   };
 
   const logout = () => {
     localStorage.removeItem(KEY);
+    document.documentElement.removeAttribute("data-brand");
     setUser(null);
   };
 

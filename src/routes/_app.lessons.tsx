@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus, BookOpen, Share2, MessageCircle } from "lucide-react";
+import { Plus, BookOpen, Share2, MessageCircle, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Field, Input } from "./_app.students";
@@ -74,9 +74,10 @@ function LessonPlansTab() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <button onClick={() => { setEditing(plan); setOpen(true); }}
                   className="text-xs text-muted-foreground hover:text-foreground underline">Edit</button>
+                <GoogleCalendarSync plan={plan} />
                 <WhatsAppSharePlan plan={plan} />
               </div>
             </div>
@@ -111,6 +112,48 @@ function LessonPlansTab() {
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["lesson-plans"] }); }}/>
       )}
     </PageCard>
+  );
+}
+
+
+function GoogleCalendarSync({ plan }: { plan: any }) {
+  function syncToCalendar() {
+    if (!plan.lesson_date) { return; }
+
+    // Build start/end datetime (lesson_date + duration)
+    const date = plan.lesson_date.replace(/-/g, "");
+    const durationMins = Number(plan.duration_minutes ?? 60);
+    const startHour = "0900";  // default 9am if no time set
+    const endTime = (() => {
+      const h = 9 + Math.floor(durationMins / 60);
+      const m = durationMins % 60;
+      return `${String(h).padStart(2,"0")}${String(m).padStart(2,"0")}`;
+    })();
+
+    const details = [
+      plan.objectives   ? `🎯 Objectives:\n${plan.objectives}`   : "",
+      plan.materials    ? `📦 Materials:\n${plan.materials}`     : "",
+      plan.activities   ? `🎨 Activities:\n${plan.activities}`   : "",
+      plan.homework     ? `📚 Homework:\n${plan.homework}`       : "",
+    ].filter(Boolean).join("\n\n");
+
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: `${plan.title}${plan.courses?.name ? ` — ${plan.courses.name}` : ""}`,
+      dates: `${date}T${startHour}00/${date}T${endTime}00`,
+      details: details || "Lesson plan created via Dice Arts Academy System",
+      location: "Dice Arts Academy",
+      add: "dicearts.academy@gmail.com",
+    });
+
+    window.open(`https://calendar.google.com/calendar/render?${params}`, "_blank");
+  }
+
+  return (
+    <button onClick={syncToCalendar} title="Add to Google Calendar (dicearts.academy@gmail.com)"
+      className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20">
+      <Calendar className="size-3"/>Calendar
+    </button>
   );
 }
 
