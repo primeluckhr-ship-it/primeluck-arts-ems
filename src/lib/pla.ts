@@ -61,14 +61,15 @@ export function csvDownload(filename: string, rows: Record<string, unknown>[]) {
   URL.revokeObjectURL(url);
 }
 
-export const ROLES = ["super_admin", "finance_admin", "teacher", "parent", "student"] as const;
+export const ROLES = ["super_admin", "finance_admin", "teacher", "parent", "student", "dice_admin"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const roleLabel = (r: string) =>
   ({
     super_admin: "Super Admin",
-    finance_admin: "Finance",
+    finance_admin: "Finance Admin",
     teacher: "Teacher",
     parent: "Parent",
     student: "Student",
-  })[r] ?? r;
+    dice_admin: "Dice Arts Admin",
+  }[r] ?? r);

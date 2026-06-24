@@ -12,21 +12,21 @@ import { cn } from "@/lib/utils";
 type Item = { to: string; label: string; icon: ReactNode; roles: Role[] };
 
 const NAV: Item[] = [
-  { to: "/", label: "Dashboard", icon: <LayoutDashboard className="size-5" />, roles: ["super_admin","finance_admin","teacher","parent","student"] },
-  { to: "/students", label: "Students", icon: <GraduationCap className="size-5" />, roles: ["super_admin","finance_admin","teacher"] },
+  { to: "/", label: "Dashboard", icon: <LayoutDashboard className="size-5" />, roles: ["super_admin","finance_admin","teacher","parent","student","dice_admin"] },
+  { to: "/students", label: "Students", icon: <GraduationCap className="size-5" />, roles: ["super_admin","finance_admin","teacher","dice_admin"] },
   { to: "/parents", label: "Parents", icon: <Users className="size-5" />, roles: ["super_admin"] },
   { to: "/instructors", label: "Instructors", icon: <UserCog className="size-5" />, roles: ["super_admin"] },
-  { to: "/courses", label: "Courses", icon: <BookOpen className="size-5" />, roles: ["super_admin","teacher"] },
+  { to: "/courses", label: "Courses", icon: <BookOpen className="size-5" />, roles: ["super_admin","teacher","dice_admin"] },
   { to: "/schedule", label: "My Schedule", icon: <CalendarDays className="size-5" />, roles: ["student"] },
   { to: "/children", label: "My Children", icon: <Baby className="size-5" />, roles: ["parent"] },
   { to: "/attendance", label: "Attendance", icon: <CalendarCheck className="size-5" />, roles: ["super_admin","teacher","student"] },
-  { to: "/finance", label: "Finance", icon: <Wallet className="size-5" />, roles: ["super_admin","finance_admin"] },
+  { to: "/finance", label: "Finance", icon: <Wallet className="size-5" />, roles: ["super_admin","finance_admin","dice_admin"] },
   { to: "/account", label: "Fee Account", icon: <Receipt className="size-5" />, roles: ["parent","student"] },
   { to: "/programs", label: "Programs", icon: <BookMarked className="size-5" />, roles: ["super_admin"] },
   { to: "/portfolio", label: "Portfolio", icon: <ImageIcon className="size-5" />, roles: ["super_admin","teacher","parent","student"] },
   { to: "/assessments", label: "Assessments", icon: <ClipboardList className="size-5" />, roles: ["super_admin","teacher","parent","student"] },
-  { to: "/announcements", label: "Announcements", icon: <Megaphone className="size-5" />, roles: ["super_admin","finance_admin","teacher","parent","student"] },
-  { to: "/reports", label: "Reports", icon: <FileText className="size-5" />, roles: ["super_admin","finance_admin"] },
+  { to: "/announcements", label: "Announcements", icon: <Megaphone className="size-5" />, roles: ["super_admin","finance_admin","teacher","parent","student","dice_admin"] },
+  { to: "/reports", label: "Reports", icon: <FileText className="size-5" />, roles: ["super_admin","finance_admin","dice_admin"] },
   { to: "/audit", label: "Audit Log", icon: <ShieldCheck className="size-5" />, roles: ["super_admin"] },
   { to: "/settings", label: "Settings", icon: <Settings className="size-5" />, roles: ["super_admin"] },
 ];

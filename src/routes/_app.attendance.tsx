@@ -1,199 +1,234 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { getStatusColor } from "@/lib/pla";
-import { ArrowLeft, ClipboardCheck } from "lucide-react";
+import { formatKES } from "@/lib/pla";
+import { CalendarCheck, CheckCircle2, XCircle, Clock, MinusCircle } from "lucide-react";
 import { toast } from "sonner";
-import { format, formatISO } from "date-fns";
+import { format } from "date-fns";
 
-export const Route = createFileRoute("/_app/attendance")({
-  validateSearch: (s: Record<string, unknown>) => ({ session: typeof s.session === "string" ? s.session : undefined }),
-  component: AttendancePage,
-});
+export const Route = createFileRoute("/_app/attendance")({ component: AttendancePage });
 
-type Mark = "present" | "absent" | "late" | "excused";
+const STATUS_CONFIG = {
+  present:  { label:"Present",  icon:<CheckCircle2 className="size-4"/>, cls:"bg-success/15 text-success border-success/30",    btn:"bg-success/20 hover:bg-success/40 text-success border-success/40" },
+  absent:   { label:"Absent",   icon:<XCircle className="size-4"/>,      cls:"bg-danger/15 text-danger border-danger/30",         btn:"bg-danger/20 hover:bg-danger/40 text-danger border-danger/40" },
+  late:     { label:"Late",     icon:<Clock className="size-4"/>,         cls:"bg-warning/15 text-warning border-warning/30",     btn:"bg-warning/20 hover:bg-warning/40 text-warning border-warning/40" },
+  excused:  { label:"Excused",  icon:<MinusCircle className="size-4"/>,   cls:"bg-muted text-muted-foreground border-border",     btn:"bg-muted/50 hover:bg-muted text-muted-foreground border-border" },
+};
 
 function AttendancePage() {
-  const search = useSearch({ from: "/_app/attendance" });
   const { user } = useAuth();
-  const [active, setActive] = useState<string | undefined>(search.session);
-  useEffect(() => setActive(search.session), [search.session]);
+  const [selectedSession, setSelectedSession] = useState<any>(null);
+  const today = format(new Date(), "yyyy-MM-dd");
 
-  if (user?.role === "student") return <StudentAttendance />;
-  if (active) return <SessionSheet sessionId={active} onBack={() => setActive(undefined)} />;
-  return <SessionList onPick={setActive} />;
-}
-
-function SessionList({ onPick }: { onPick: (id: string) => void }) {
-  const today = formatISO(new Date(), { representation: "date" });
-  const { data } = useQuery({
-    queryKey: ["sessions-list"],
-    queryFn: async () => (await supabase
-      .from("sessions")
-      .select("id,session_date,topic,status,courses(name,room,start_time,end_time)")
-      .order("session_date", { ascending: false }).limit(100)).data ?? [],
-  });
-  const todays = (data ?? []).filter((s: any) => s.session_date === today);
-  const others = (data ?? []).filter((s: any) => s.session_date !== today);
-  return (
-    <div className="space-y-4">
-      <PageCard title="Today's Sessions" subtitle={format(new Date(), "EEEE, dd MMM yyyy")}>
-        <SessionTable rows={todays} onPick={onPick} />
-      </PageCard>
-      <PageCard title="Recent Sessions">
-        <SessionTable rows={others} onPick={onPick} />
-      </PageCard>
-    </div>
-  );
-}
-
-function SessionTable({ rows, onPick }: { rows: any[]; onPick: (id: string) => void }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Date</th><th>Course</th><th>Time</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          {rows.map((s) => (
-            <tr key={s.id} className="border-b border-border/50">
-              <td className="py-2.5">{format(new Date(s.session_date), "dd MMM")}</td>
-              <td className="py-2.5">{s.courses?.name}</td>
-              <td className="py-2.5 text-muted-foreground">{s.courses?.start_time?.slice(0,5)}–{s.courses?.end_time?.slice(0,5)}</td>
-              <td className="py-2.5"><Badge className={getStatusColor(s.status)}>{s.status}</Badge></td>
-              <td className="py-2.5"><button onClick={() => onPick(s.id)} className="text-accent text-xs font-medium inline-flex items-center gap-1"><ClipboardCheck className="size-4" /> Mark</button></td>
-            </tr>
-          ))}
-          {!rows.length && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No sessions.</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SessionSheet({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const [marks, setMarks] = useState<Record<string, Mark>>({});
-  const [saving, setSaving] = useState(false);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["session-sheet", sessionId],
+  // For teachers: only their sessions. For admin: all sessions
+  const { data: sessions, isLoading } = useQuery({
+    queryKey:["sessions-today", user?.id, user?.role],
     queryFn: async () => {
-      const { data: session } = await supabase.from("sessions").select("*,courses(name,room)").eq("id", sessionId).maybeSingle();
-      if (!session) return null;
-      const { data: enr } = await supabase.from("course_enrollments").select("student_id,students(first_name,last_name,admission_number)").eq("course_id", session.course_id);
-      const { data: existing } = await supabase.from("attendance_records").select("student_id,status").eq("session_id", sessionId);
-      return { session, students: enr ?? [], existing: existing ?? [] };
+      let q = supabase.from("sessions")
+        .select("*,courses(name,instructor_id,per_session_billing,session_fee,branch_id)")
+        .order("start_time");
+      if (user?.role === "teacher") {
+        // Get instructor linked to this user
+        const { data: inst } = await supabase.from("instructors").select("id").eq("email", user.email).limit(1);
+        if (inst?.[0]) q = q.eq("courses.instructor_id", inst[0].id);
+      }
+      if (user?.role === "dice_admin") {
+        q = q.eq("courses.branch_id", user.branch_id);
+      }
+      if (user?.role === "student") {
+        const { data: enr } = await supabase.from("course_enrollments").select("course_id").eq("student_id", user.linked_entity_id??user.id);
+        const ids = (enr??[]).map((e:any) => e.course_id);
+        if (ids.length) q = q.in("course_id", ids);
+      }
+      return (await q.order("date", {ascending:false})).data ?? [];
     },
   });
 
-  useEffect(() => {
-    if (data?.existing) {
-      const initial: Record<string, Mark> = {};
-      data.existing.forEach((e: any) => { initial[e.student_id] = e.status; });
-      setMarks(initial);
-    }
-  }, [data?.existing]);
-
-  async function saveAll() {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const records = data.students.map((s: any) => ({
-        session_id: sessionId,
-        student_id: s.student_id,
-        status: marks[s.student_id] ?? "absent",
-        marked_by: user?.id,
-      }));
-      // delete existing then insert
-      await supabase.from("attendance_records").delete().eq("session_id", sessionId);
-      const { error } = await supabase.from("attendance_records").insert(records);
-      if (error) throw error;
-      await supabase.from("sessions").update({ status: "completed" }).eq("id", sessionId);
-      toast.success("Attendance saved");
-      qc.invalidateQueries({ queryKey: ["sessions-list"] });
-      onBack();
-    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  if (selectedSession) {
+    return <AttendanceSheet session={selectedSession} onBack={() => setSelectedSession(null)} />;
   }
 
-  if (isLoading) return <div className="text-muted-foreground">Loading…</div>;
-  if (!data) return <div>Session not found.</div>;
+  const todaySessions = (sessions??[]).filter((s:any) => s.date === today);
+  const otherSessions = (sessions??[]).filter((s:any) => s.date !== today);
 
   return (
     <div className="space-y-4">
-      <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Back to sessions</button>
-      <PageCard
-        title={`${data.session.courses?.name} — ${format(new Date(data.session.session_date), "dd MMM yyyy")}`}
-        subtitle={data.session.topic || "No topic set"}
-        action={<button onClick={saveAll} disabled={saving} className="rounded-md bg-accent text-accent-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50">{saving ? "Saving…" : "Save Attendance"}</button>}
-      >
-        <table className="w-full text-sm">
-          <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Adm #</th><th>Student</th><th>Status</th></tr></thead>
-          <tbody>
-            {data.students.map((s: any) => (
-              <tr key={s.student_id} className="border-b border-border/50">
-                <td className="py-2.5 font-mono text-xs">{s.students?.admission_number}</td>
-                <td className="py-2.5">{s.students?.first_name} {s.students?.last_name}</td>
-                <td className="py-2.5">
-                  <div className="flex gap-1">
-                    {(["present","absent","late","excused"] as Mark[]).map((m) => (
-                      <button key={m} onClick={() => setMarks({ ...marks, [s.student_id]: m })}
-                        className={`px-3 py-1.5 text-xs rounded font-medium ${marks[s.student_id] === m ? markBg(m) : "bg-muted text-muted-foreground"}`}>
-                        {m[0].toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!data.students.length && <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">No enrolled students.</td></tr>}
-          </tbody>
-        </table>
+      {todaySessions.length > 0 && (
+        <PageCard title="Today's Sessions" subtitle={format(new Date(),"EEEE, d MMMM yyyy")}>
+          <div className="space-y-2">
+            {todaySessions.map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)}/>)}
+          </div>
+        </PageCard>
+      )}
+      <PageCard title={todaySessions.length?"Recent Sessions":"All Sessions"}>
+        {isLoading && <p className="py-6 text-center text-muted-foreground">Loading…</p>}
+        <div className="space-y-2">
+          {otherSessions.slice(0,20).map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)}/>)}
+          {!isLoading && !sessions?.length && <p className="py-8 text-center text-muted-foreground">No sessions found</p>}
+        </div>
       </PageCard>
     </div>
   );
 }
 
-function markBg(m: Mark) {
-  return {
-    present: "bg-success text-white",
-    absent: "bg-danger text-white",
-    late: "bg-warning text-white",
-    excused: "bg-accent text-accent-foreground",
-  }[m];
+function SessionRow({ session, onClick }:{ session:any; onClick:()=>void }) {
+  const cfg = STATUS_CONFIG[session.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.present;
+  return (
+    <button onClick={onClick} className="w-full flex items-center justify-between gap-3 rounded-lg border border-border p-3 hover:bg-muted/40 text-left transition-colors">
+      <div className="flex items-center gap-3">
+        <CalendarCheck className="size-5 text-accent shrink-0"/>
+        <div>
+          <div className="font-medium text-sm">{session.courses?.name ?? "Session"}</div>
+          <div className="text-xs text-muted-foreground">{session.date} · {session.start_time?.slice(0,5)} – {session.end_time?.slice(0,5)}</div>
+        </div>
+      </div>
+      <Badge className={cfg.cls}>{session.status}</Badge>
+    </button>
+  );
 }
 
-function StudentAttendance() {
-  const { user } = useAuth();
-  const { data } = useQuery({
-    queryKey: ["my-attendance", user?.linked_entity_id],
+function AttendanceSheet({ session, onBack }:{ session:any; onBack:()=>void }) {
+  const qc = useQueryClient();
+  const [marks, setMarks] = useState<Record<string,string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const { data: enrolled } = useQuery({
+    queryKey:["enrolled", session.course_id],
     queryFn: async () => {
-      if (!user?.linked_entity_id) return [];
-      const { data } = await supabase
-        .from("attendance_records")
-        .select("status,sessions(session_date,courses(name))")
-        .eq("student_id", user.linked_entity_id)
-        .order("created_at", { ascending: false }).limit(100);
-      return data ?? [];
+      const { data } = await supabase.from("course_enrollments")
+        .select("student_id,students(id,first_name,last_name,admission_number,student_type)")
+        .eq("course_id", session.course_id);
+      return (data??[]).map((e:any) => e.students).filter(Boolean);
     },
   });
+
+  const { data: existing } = useQuery({
+    queryKey:["attendance-existing", session.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("attendance_records").select("*").eq("session_id", session.id);
+      const map:Record<string,string> = {};
+      (data??[]).forEach((r:any) => { map[r.student_id] = r.status; });
+      return map;
+    },
+    onSuccess: (data:any) => setMarks(data),
+  });
+
+  function mark(studentId:string, status:string) {
+    setMarks((m) => ({...m, [studentId]: status}));
+  }
+
+  async function saveAll() {
+    setSaving(true);
+    try {
+      const { user: authUser } = useAuth();
+      const rows = (enrolled??[]).map((s:any) => ({
+        session_id: session.id, student_id: s.id, course_id: session.course_id,
+        status: marks[s.id] ?? "absent", marked_by: null,
+      }));
+
+      // Upsert attendance records
+      const { data: upserted, error } = await supabase.from("attendance_records")
+        .upsert(rows, { onConflict:"session_id,student_id" }).select();
+      if (error) throw error;
+
+      // Auto-charge for present students on per-session-billing courses
+      if (session.courses?.per_session_billing && session.courses?.session_fee) {
+        const fee = Number(session.courses.session_fee);
+        const presentRecords = (upserted??[]).filter((r:any) => r.status === "present");
+        const billingTypes = ["junior","teen","adult"];
+
+        for (const rec of presentRecords) {
+          const student = (enrolled??[]).find((s:any) => s.id === rec.student_id);
+          if (!student || !billingTypes.includes(student.student_type)) continue;
+
+          // Check if charge already exists
+          const { data: existing } = await supabase.from("attendance_charges")
+            .select("id").eq("attendance_id", rec.id).limit(1);
+          if (existing?.length) continue;
+
+          // Create charge
+          await supabase.from("attendance_charges").insert({
+            attendance_id: rec.id, student_id: rec.student_id,
+            course_id: session.course_id, session_id: session.id, amount: fee,
+          });
+
+          // Update student account
+          await supabase.from("student_accounts").upsert({
+            student_id: rec.student_id,
+            total_fees: fee, total_outstanding: fee,
+          }, { onConflict:"student_id" });
+        }
+
+        toast.success(`Attendance saved · ${presentRecords.length} session charges posted`);
+      } else {
+        toast.success("Attendance saved");
+      }
+
+      qc.invalidateQueries({queryKey:["attendance-existing", session.id]});
+      onBack();
+    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+  }
+
   return (
-    <PageCard title="My Attendance" subtitle="Recent records">
-      <table className="w-full text-sm">
-        <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Date</th><th>Course</th><th>Status</th></tr></thead>
-        <tbody>
-          {(data ?? []).map((a: any, i) => (
-            <tr key={i} className="border-b border-border/50">
-              <td className="py-2.5">{a.sessions?.session_date ? format(new Date(a.sessions.session_date), "dd MMM yyyy") : "—"}</td>
-              <td className="py-2.5">{a.sessions?.courses?.name}</td>
-              <td className="py-2.5"><Badge className={getStatusColor(a.status)}>{a.status}</Badge></td>
-            </tr>
-          ))}
-          {!data?.length && <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">No records.</td></tr>}
-        </tbody>
-      </table>
-    </PageCard>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
+        <div>
+          <h2 className="font-semibold">{session.courses?.name}</h2>
+          <p className="text-xs text-muted-foreground">{session.date} · {session.start_time?.slice(0,5)}</p>
+        </div>
+        {session.courses?.per_session_billing && (
+          <Badge className="bg-accent/15 text-accent border-accent/30 ml-auto">
+            KES {Number(session.courses.session_fee).toLocaleString()} / session
+          </Badge>
+        )}
+      </div>
+
+      <PageCard title={`Students (${enrolled?.length ?? 0})`}
+        subtitle={session.courses?.per_session_billing ? "✓ Present = auto-charge" : undefined}>
+        <div className="space-y-2">
+          {(enrolled??[]).map((s:any) => {
+            const current = marks[s.id] ?? existing?.[s.id] ?? "";
+            const billable = ["junior","teen","adult"].includes(s.student_type);
+            return (
+              <div key={s.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm">{s.first_name} {s.last_name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-mono">{s.admission_number}</span>
+                    {session.courses?.per_session_billing && billable && (
+                      <span className="text-xs text-accent">· charges on present</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map((st) => (
+                    <button key={st} onClick={() => mark(s.id, st)}
+                      title={STATUS_CONFIG[st].label}
+                      className={`size-8 rounded-md border flex items-center justify-center text-xs transition-all ${current === st ? STATUS_CONFIG[st].cls : "border-border text-muted-foreground hover:border-accent"}`}>
+                      {st === "present" ? "P" : st === "absent" ? "A" : st === "late" ? "L" : "E"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {!enrolled?.length && <p className="py-6 text-center text-muted-foreground">No students enrolled</p>}
+        </div>
+        <div className="flex justify-between items-center mt-4 pt-4 border-t border-border">
+          <div className="text-sm text-muted-foreground">
+            {Object.values(marks).filter(v=>v==="present").length} present ·{" "}
+            {Object.values(marks).filter(v=>v==="absent").length} absent
+          </div>
+          <button onClick={saveAll} disabled={saving}
+            className="px-5 py-2 rounded-md bg-accent text-accent-foreground font-medium text-sm disabled:opacity-50">
+            {saving?"Saving…":"Save Attendance"}
+          </button>
+        </div>
+      </PageCard>
+    </div>
   );
 }

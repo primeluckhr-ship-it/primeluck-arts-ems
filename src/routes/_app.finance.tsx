@@ -5,429 +5,588 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge, StatCard } from "@/components/app-shell";
 import { formatKES, getStatusColor, generateReceiptNumber, generateInvoiceNumber } from "@/lib/pla";
-import { Plus, Printer, MessageCircle, Wallet, AlertCircle, Receipt } from "lucide-react";
+import { Plus, Printer, MessageCircle, Wallet, AlertCircle, Receipt, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { format, formatISO } from "date-fns";
 import { Field, Input } from "./_app.students";
 
-export const Route = createFileRoute("/_app/finance")({
-  component: FinancePage,
-});
+export const Route = createFileRoute("/_app/finance")({ component: FinancePage });
 
 function FinancePage() {
-  const [tab, setTab] = useState<"invoices" | "payments" | "arrears">("invoices");
+  const { user } = useAuth();
+  const isDice = user?.role === "dice_admin";
+  const [tab, setTab] = useState<"invoices"|"payments"|"arrears"|"expenditure"|"income">("invoices");
+
+  const tabs = isDice
+    ? ["invoices","payments","arrears","expenditure","income"] as const
+    : ["invoices","payments","arrears","expenditure"] as const;
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 border-b border-border">
-        {(["invoices", "payments", "arrears"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm capitalize border-b-2 ${tab === t ? "border-accent text-accent" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{t}</button>
+      <div className="flex gap-1 border-b border-border overflow-x-auto">
+        {tabs.map((t) => (
+          <button key={t} onClick={() => setTab(t as any)}
+            className={`px-4 py-2 text-sm capitalize whitespace-nowrap border-b-2 ${tab===t?"border-accent text-accent":"border-transparent text-muted-foreground hover:text-foreground"}`}>
+            {t}
+          </button>
         ))}
       </div>
-      {tab === "invoices" && <InvoicesTab />}
-      {tab === "payments" && <PaymentsTab />}
-      {tab === "arrears" && <ArrearsTab />}
+      {tab==="invoices"     && <InvoicesTab />}
+      {tab==="payments"     && <PaymentsTab />}
+      {tab==="arrears"      && <ArrearsTab />}
+      {tab==="expenditure"  && <ExpenditureTab />}
+      {tab==="income"       && <IncomeTab />}
     </div>
   );
 }
 
+/* ── INVOICES ── */
 function InvoicesTab() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [month, setMonth] = useState(now.getMonth()+1);
   const [year, setYear] = useState(now.getFullYear());
   const [statusFilter, setStatusFilter] = useState("all");
   const [generating, setGenerating] = useState(false);
+  const [showTermly, setShowTermly] = useState(false);
 
   const { data } = useQuery({
-    queryKey: ["invoices-list", month, year, statusFilter],
+    queryKey:["invoices-list", month, year, statusFilter, user?.branch_id],
     queryFn: async () => {
-      let q = supabase.from("invoices").select("*,students(first_name,last_name,admission_number)").eq("period_month", month).eq("period_year", year);
+      let q = supabase.from("invoices")
+        .select("*,students(first_name,last_name,admission_number,branch_id)")
+        .eq("period_month", month).eq("period_year", year);
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
-      return (await q.order("invoice_number", { ascending: false })).data ?? [];
+      if (user?.role === "dice_admin") q = q.eq("students.branch_id", user.branch_id);
+      return (await q.order("invoice_number", {ascending:false})).data ?? [];
     },
   });
 
   async function bulkGenerate() {
     setGenerating(true);
     try {
-      const { data: students } = await supabase.from("students").select("id,first_name,last_name").eq("status", "active");
-      const { data: existing } = await supabase.from("invoices").select("student_id").eq("period_month", month).eq("period_year", year);
-      const existingIds = new Set((existing ?? []).map((e: any) => e.student_id));
-      const newOnes = (students ?? []).filter((s: any) => !existingIds.has(s.id));
-      if (!newOnes.length) { toast.info("All invoices for this period already generated"); return; }
-      const rows = await Promise.all(newOnes.map(async (s: any) => {
-        const { data: enr } = await supabase.from("course_enrollments").select("courses(programs(monthly_fee))").eq("student_id", s.id);
-        const total = (enr ?? []).reduce((sum: number, e: any) => sum + Number(e.courses?.programs?.monthly_fee ?? 0), 0);
+      let q = supabase.from("students").select("id,first_name,last_name,branch_id").eq("status","active");
+      if (user?.role === "dice_admin") q = q.eq("branch_id", user.branch_id);
+      const { data: students } = await q;
+      const { data: existing } = await supabase.from("invoices").select("student_id")
+        .eq("period_month", month).eq("period_year", year).eq("billing_type","monthly");
+      const existingIds = new Set((existing??[]).map((e:any) => e.student_id));
+      const newOnes = (students??[]).filter((s:any) => !existingIds.has(s.id));
+      if (!newOnes.length) { toast.info("All invoices already generated"); return; }
+      const rows = await Promise.all(newOnes.map(async (s:any) => {
+        const { data: enr } = await supabase.from("course_enrollments")
+          .select("courses(programs(monthly_fee))").eq("student_id", s.id);
+        const total = (enr??[]).reduce((sum:number,e:any) => sum + Number(e.courses?.programs?.monthly_fee??0), 0);
         return {
           invoice_number: generateInvoiceNumber(year, month),
           student_id: s.id, period_month: month, period_year: year,
-          issue_date: formatISO(new Date(), { representation: "date" }),
-          due_date: formatISO(new Date(year, month - 1, 5), { representation: "date" }),
+          issue_date: formatISO(new Date(),{representation:"date"}),
+          due_date: formatISO(new Date(year, month-1, 5),{representation:"date"}),
           subtotal: total, total_amount: total, amount_paid: 0, amount_outstanding: total,
-          status: "sent",
+          status:"sent", billing_type:"monthly",
         };
       }));
       const { error } = await supabase.from("invoices").insert(rows);
       if (error) throw error;
       toast.success(`Generated ${rows.length} invoices`);
-      qc.invalidateQueries({ queryKey: ["invoices-list"] });
-    } catch (e: any) { toast.error(e.message); } finally { setGenerating(false); }
+      qc.invalidateQueries({queryKey:["invoices-list"]});
+    } catch(e:any) { toast.error(e.message); } finally { setGenerating(false); }
   }
 
   return (
-    <PageCard
-      title="Invoices"
+    <PageCard title="Invoices"
       action={
-        <button onClick={bulkGenerate} disabled={generating} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium disabled:opacity-50">
-          <Plus className="size-4" /> {generating ? "Generating…" : "Bulk Generate"}
-        </button>
-      }
-    >
-      <TermlyGenerator onGenerated={() => qc.invalidateQueries({ queryKey: ["invoices-list"] })} />
+        <div className="flex gap-2">
+          <button onClick={() => setShowTermly(!showTermly)}
+            className={`px-3 py-2 text-sm rounded-md border ${showTermly?"bg-accent text-accent-foreground border-accent":"border-border text-muted-foreground"}`}>
+            Termly
+          </button>
+          <button onClick={bulkGenerate} disabled={generating}
+            className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium disabled:opacity-50">
+            <Plus className="size-4"/>{generating?"Generating…":"Monthly Bulk"}
+          </button>
+        </div>
+      }>
+      {showTermly && <TermlyGenerator onGenerated={() => qc.invalidateQueries({queryKey:["invoices-list"]})} />}
       <div className="flex flex-wrap gap-2 mb-4 mt-4">
         <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{format(new Date(2000, m - 1), "MMMM")}</option>)}
+          {Array.from({length:12},(_,i)=>i+1).map((m) => <option key={m} value={m}>{format(new Date(2000,m-1),"MMMM")}</option>)}
         </select>
         <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
-          {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map((y) => <option key={y} value={y}>{y}</option>)}
+          {Array.from({length:5},(_,i)=>now.getFullYear()-2+i).map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
-          <option value="all">All</option><option>draft</option><option>sent</option><option>partial</option><option>paid</option><option>overdue</option>
+          <option value="all">All</option><option>draft</option><option>sent</option>
+          <option>partial</option><option>paid</option><option>overdue</option>
         </select>
       </div>
-      <table className="w-full text-sm">
-        <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Invoice #</th><th>Student</th><th>Due</th><th>Total</th><th>Outstanding</th><th>Status</th></tr></thead>
-        <tbody>
-          {(data ?? []).map((i: any) => (
-            <tr key={i.id} className="border-b border-border/50">
-              <td className="py-2.5 font-mono text-xs">{i.invoice_number}</td>
-              <td className="py-2.5">{i.students?.first_name} {i.students?.last_name}</td>
-              <td className="py-2.5 text-muted-foreground">{format(new Date(i.due_date), "dd MMM")}</td>
-              <td className="py-2.5">{formatKES(i.total_amount)}</td>
-              <td className="py-2.5 font-semibold">{formatKES(i.amount_outstanding)}</td>
-              <td className="py-2.5"><Badge className={getStatusColor(i.status)}>{i.status}</Badge></td>
-            </tr>
-          ))}
-          {!data?.length && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">No invoices for this period.</td></tr>}
-        </tbody>
-      </table>
-    </PageCard>
-  );
-}
-
-function PaymentsTab() {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [showReceipt, setShowReceipt] = useState<any>(null);
-  const { data } = useQuery({
-    queryKey: ["payments-list"],
-    queryFn: async () => (await supabase.from("payments").select("*,students(first_name,last_name,admission_number)").order("payment_date", { ascending: false }).limit(200)).data ?? [],
-  });
-  return (
-    <PageCard
-      title="Payments"
-      action={<button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4" /> Record Payment</button>}
-    >
-      <table className="w-full text-sm">
-        <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Receipt</th><th>Student</th><th>Method</th><th>Date</th><th>Amount</th><th></th></tr></thead>
-        <tbody>
-          {(data ?? []).map((p: any) => (
-            <tr key={p.id} className="border-b border-border/50">
-              <td className="py-2.5 font-mono text-xs">{p.receipt_number}</td>
-              <td className="py-2.5">{p.students?.first_name} {p.students?.last_name}</td>
-              <td className="py-2.5"><Badge className={getStatusColor(p.payment_method)}>{p.payment_method}</Badge></td>
-              <td className="py-2.5 text-muted-foreground">{format(new Date(p.payment_date), "dd MMM yyyy")}</td>
-              <td className="py-2.5 font-semibold">{formatKES(p.amount)}</td>
-              <td><button onClick={() => setShowReceipt(p)} className="p-1.5 rounded hover:bg-muted"><Printer className="size-4" /></button></td>
-            </tr>
-          ))}
-          {!data?.length && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">No payments.</td></tr>}
-        </tbody>
-      </table>
-      {open && <PaymentForm onClose={() => setOpen(false)} onSaved={(p) => { setOpen(false); qc.invalidateQueries(); setShowReceipt(p); }} />}
-      {showReceipt && <ReceiptModal payment={showReceipt} onClose={() => setShowReceipt(null)} />}
-    </PageCard>
-  );
-}
-
-function PaymentForm({ onClose, onSaved }: { onClose: () => void; onSaved: (p: any) => void }) {
-  const { user } = useAuth();
-  const [studentSearch, setStudentSearch] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [form, setForm] = useState({
-    amount: "", payment_method: "MPesa", mpesa_code: "", payment_date: formatISO(new Date(), { representation: "date" }), notes: "",
-  });
-  const [saving, setSaving] = useState(false);
-
-  const { data: students } = useQuery({
-    queryKey: ["pay-students", studentSearch],
-    enabled: studentSearch.length > 1,
-    queryFn: async () => (await supabase.from("students").select("id,first_name,last_name,admission_number")
-      .or(`first_name.ilike.%${studentSearch}%,last_name.ilike.%${studentSearch}%,admission_number.ilike.%${studentSearch}%`).limit(10)).data ?? [],
-  });
-
-  async function save() {
-    if (!studentId || !form.amount) { toast.error("Select a student and enter amount"); return; }
-    setSaving(true);
-    try {
-      const amount = Number(form.amount);
-      const payment = {
-        receipt_number: generateReceiptNumber(),
-        student_id: studentId,
-        amount,
-        payment_method: form.payment_method,
-        mpesa_code: form.mpesa_code || null,
-        payment_date: form.payment_date,
-        notes: form.notes || null,
-        recorded_by: user?.id,
-      };
-      const { data: inserted, error } = await supabase.from("payments").insert(payment).select("*,students(first_name,last_name,admission_number)").single();
-      if (error) throw error;
-
-      // Allocate to oldest unpaid invoices
-      const { data: invoices } = await supabase.from("invoices").select("*").eq("student_id", studentId).gt("amount_outstanding", 0).order("due_date");
-      let remaining = amount;
-      for (const inv of invoices ?? []) {
-        if (remaining <= 0) break;
-        const apply = Math.min(remaining, Number(inv.amount_outstanding));
-        await supabase.from("payment_allocations").insert({ payment_id: inserted.id, invoice_id: inv.id, allocated_amount: apply });
-        const newPaid = Number(inv.amount_paid) + apply;
-        const newOut = Number(inv.total_amount) - newPaid;
-        await supabase.from("invoices").update({
-          amount_paid: newPaid, amount_outstanding: newOut,
-          status: newOut <= 0 ? "paid" : "partial",
-        }).eq("id", inv.id);
-        remaining -= apply;
-      }
-
-      // Update student account
-      const { data: acct } = await supabase.from("student_accounts").select("*").eq("student_id", studentId).maybeSingle();
-      if (acct) {
-        const newPaid = Number(acct.total_paid) + amount;
-        const newOut = Math.max(Number(acct.total_fees) - newPaid, 0);
-        await supabase.from("student_accounts").update({
-          total_paid: newPaid, total_outstanding: newOut,
-          account_status: newOut <= 0 ? "settled" : "outstanding",
-        }).eq("student_id", studentId);
-      } else {
-        await supabase.from("student_accounts").insert({ student_id: studentId, total_fees: amount, total_paid: amount, total_outstanding: 0, account_status: "settled" });
-      }
-
-      toast.success("Payment recorded");
-      onSaved(inserted);
-    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6">
-        <h2 className="text-lg font-semibold mb-4">Record Payment</h2>
-        <div className="space-y-3">
-          <Field label="Student">
-            <Input value={studentSearch} onChange={setStudentSearch} placeholder="Search by name or admission #" />
-            {students && students.length > 0 && !studentId && (
-              <div className="border border-border mt-1 rounded-md max-h-40 overflow-y-auto bg-background">
-                {students.map((s: any) => (
-                  <button key={s.id} type="button" onClick={() => { setStudentId(s.id); setStudentSearch(`${s.first_name} ${s.last_name} (${s.admission_number})`); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted">
-                    {s.first_name} {s.last_name} · <span className="text-xs text-muted-foreground font-mono">{s.admission_number}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </Field>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Amount (KES)"><Input type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} /></Field>
-            <Field label="Method">
-              <select value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-                <option>MPesa</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
-              </select>
-            </Field>
-            <Field label="MPesa code"><Input value={form.mpesa_code} onChange={(v) => setForm({ ...form, mpesa_code: v })} /></Field>
-            <Field label="Date"><Input type="date" value={form.payment_date} onChange={(v) => setForm({ ...form, payment_date: v })} /></Field>
-          </div>
-          <Field label="Notes"><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" /></Field>
-        </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">{saving ? "Saving…" : "Save & Allocate"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReceiptModal({ payment, onClose }: { payment: any; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:bg-white">
-      <div className="bg-white text-black rounded-xl w-full max-w-md p-6 print:shadow-none">
-        <div className="text-center border-b border-gray-300 pb-3 mb-3">
-          <div className="font-black text-xl text-purple-900">PRIME LUCK ARTS</div>
-          <div className="text-[10px] tracking-[0.3em] text-amber-600">ACADEMY · NAIROBI</div>
-          <div className="text-xs mt-2">OFFICIAL RECEIPT</div>
-        </div>
-        <div className="text-sm space-y-1.5">
-          <div className="flex justify-between"><span className="text-gray-500">Receipt #</span><span className="font-mono">{payment.receipt_number}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Date</span><span>{format(new Date(payment.payment_date), "dd MMM yyyy")}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Student</span><span>{payment.students?.first_name} {payment.students?.last_name}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Adm #</span><span className="font-mono">{payment.students?.admission_number}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Method</span><span>{payment.payment_method}{payment.mpesa_code ? ` · ${payment.mpesa_code}` : ""}</span></div>
-          <div className="border-t border-gray-300 mt-3 pt-3 flex justify-between font-bold text-lg"><span>Amount</span><span>{formatKES(payment.amount)}</span></div>
-        </div>
-        <div className="text-[10px] text-center text-gray-500 mt-4">Thank you for your payment.</div>
-        <div className="flex gap-2 mt-5 print:hidden">
-          <button onClick={() => window.print()} className="flex-1 bg-purple-900 text-white py-2 rounded text-sm font-medium">Print</button>
-          <button onClick={onClose} className="flex-1 border border-gray-300 py-2 rounded text-sm">Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ArrearsTab() {
-  const { data } = useQuery({
-    queryKey: ["arrears"],
-    queryFn: async () => {
-      const { data: accts } = await supabase.from("student_accounts").select("*,students(first_name,last_name,admission_number)").gt("total_outstanding", 0).order("total_outstanding", { ascending: false });
-      // get oldest unpaid invoice per student to compute aging
-      const result = [];
-      for (const a of accts ?? []) {
-        const { data: oldest } = await supabase.from("invoices").select("due_date").eq("student_id", a.student_id).gt("amount_outstanding", 0).order("due_date").limit(1).maybeSingle();
-        let ageMonths = 0;
-        if (oldest) {
-          const due = new Date(oldest.due_date);
-          ageMonths = Math.max(0, Math.floor((Date.now() - due.getTime()) / (1000 * 60 * 60 * 24 * 30)));
-        }
-        result.push({ ...a, age: ageMonths });
-      }
-      return result;
-    },
-  });
-
-  const totals = useMemo(() => {
-    const a = data ?? [];
-    return {
-      total: a.reduce((s, x: any) => s + Number(x.total_outstanding), 0),
-      students: a.length,
-      overdue: a.filter((x: any) => x.age > 1).length,
-    };
-  }, [data]);
-
-  function sendReminder(row: any) {
-    const phone = ""; // could fetch parent's whatsapp
-    const msg = encodeURIComponent(`Dear Parent, this is a friendly reminder that ${row.students?.first_name} ${row.students?.last_name} has an outstanding balance of ${formatKES(row.total_outstanding)} at PrimeLuck Arts Academy. Kindly settle at your earliest convenience. Thank you.`);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Total Arrears" value={formatKES(totals.total)} icon={<Wallet className="size-5" />} tone="danger" />
-        <StatCard label="Students Owing" value={totals.students} icon={<AlertCircle className="size-5" />} tone="warning" />
-        <StatCard label="2+ Months Overdue" value={totals.overdue} icon={<Receipt className="size-5" />} tone="danger" />
-      </div>
-      <PageCard title="Arrears" subtitle="Sorted by amount owing">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Adm #</th><th>Student</th><th>Aging</th><th className="text-right">Outstanding</th><th></th></tr></thead>
+          <thead><tr className="text-left text-muted-foreground border-b border-border">
+            <th className="py-2 pr-3">Invoice #</th><th className="py-2 pr-3">Student</th>
+            <th className="py-2 pr-3">Type</th><th className="py-2 pr-3">Total</th>
+            <th className="py-2 pr-3">Outstanding</th><th className="py-2">Status</th>
+          </tr></thead>
           <tbody>
-            {(data ?? []).map((a: any) => (
-              <tr key={a.id} className="border-b border-border/50">
-                <td className="py-2.5 font-mono text-xs">{a.students?.admission_number}</td>
-                <td className="py-2.5">{a.students?.first_name} {a.students?.last_name}</td>
-                <td className="py-2.5"><Badge className={getStatusColor(a.age >= 2 ? "overdue" : a.age >= 1 ? "partial" : "active")}>{a.age === 0 ? "Current" : `${a.age}m overdue`}</Badge></td>
-                <td className="py-2.5 text-right font-bold text-danger">{formatKES(a.total_outstanding)}</td>
-                <td><button onClick={() => sendReminder(a)} className="text-xs text-accent inline-flex items-center gap-1"><MessageCircle className="size-4" /> Remind</button></td>
+            {(data??[]).map((inv:any) => (
+              <tr key={inv.id} className="border-b border-border/50 hover:bg-muted/30">
+                <td className="py-2.5 pr-3 font-mono text-xs">{inv.invoice_number}</td>
+                <td className="py-2.5 pr-3">{inv.students?.first_name} {inv.students?.last_name}</td>
+                <td className="py-2.5 pr-3"><Badge className={inv.billing_type==="termly"?"bg-purple-500/15 text-purple-400 border-purple-500/30":"bg-blue-500/15 text-blue-400 border-blue-500/30"}>{inv.billing_type}</Badge></td>
+                <td className="py-2.5 pr-3 font-semibold">{formatKES(inv.total_amount)}</td>
+                <td className="py-2.5 pr-3 text-danger font-semibold">{formatKES(inv.amount_outstanding)}</td>
+                <td className="py-2.5"><Badge className={getStatusColor(inv.status)}>{inv.status}</Badge></td>
               </tr>
             ))}
-            {!data?.length && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">All clear — no arrears.</td></tr>}
+            {!data?.length && <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No invoices for this period</td></tr>}
           </tbody>
         </table>
-      </PageCard>
-    </div>
+      </div>
+    </PageCard>
   );
 }
 
-/* ─── TERMLY INVOICE GENERATOR (appended) ─── */
-export function TermlyGenerator({ onGenerated }: { onGenerated: () => void }) {
+/* ── TERMLY GENERATOR ── */
+function TermlyGenerator({ onGenerated }:{ onGenerated:()=>void }) {
+  const { user } = useAuth();
   const [termId, setTermId] = useState("");
   const [typeFilter, setTypeFilter] = useState("institution");
   const [generating, setGenerating] = useState(false);
-  const qc = useQueryClient();
-
   const { data: terms } = useQuery({
-    queryKey: ["terms-list"],
-    queryFn: async () => (await supabase.from("terms").select("*").order("year").order("term_number")).data ?? [],
+    queryKey:["terms-list"],
+    queryFn: async () => (await supabase.from("terms").select("*").order("year").order("term_number")).data??[],
   });
-
   async function generate() {
-    if (!termId) { toast.error("Select a term first"); return; }
+    if (!termId) { toast.error("Select a term"); return; }
     setGenerating(true);
     try {
-      const term = (terms ?? []).find((t: any) => t.id === termId);
-      const { data: students } = await supabase.from("students")
-        .select("id,first_name,last_name,student_type")
-        .eq("status", "active")
-        .eq("student_type", typeFilter);
-
-      const { data: existing } = await supabase.from("invoices")
-        .select("student_id").eq("term_id", termId).eq("billing_type", "termly");
-      const existingIds = new Set((existing ?? []).map((e: any) => e.student_id));
-      const newOnes = (students ?? []).filter((s: any) => !existingIds.has(s.id));
-
-      if (!newOnes.length) { toast.info("All termly invoices already generated for this group"); return; }
-
-      const rows = await Promise.all(newOnes.map(async (s: any) => {
+      const term = (terms??[]).find((t:any) => t.id === termId);
+      let q = supabase.from("students").select("id,first_name,last_name,student_type").eq("status","active").eq("student_type", typeFilter);
+      if (user?.role === "dice_admin") q = q.eq("branch_id", user.branch_id);
+      const { data: students } = await q;
+      const { data: existing } = await supabase.from("invoices").select("student_id").eq("term_id", termId).eq("billing_type","termly");
+      const existingIds = new Set((existing??[]).map((e:any) => e.student_id));
+      const newOnes = (students??[]).filter((s:any) => !existingIds.has(s.id));
+      if (!newOnes.length) { toast.info("Already generated for this group"); return; }
+      const rows = await Promise.all(newOnes.map(async (s:any) => {
         const { data: enr } = await supabase.from("course_enrollments")
-          .select("fee_override,courses(programs(term_fee,monthly_fee,billing_cycle))")
-          .eq("student_id", s.id);
-        const total = (enr ?? []).reduce((sum: number, e: any) => {
+          .select("fee_override,courses(programs(term_fee,monthly_fee,billing_cycle))").eq("student_id", s.id);
+        const total = (enr??[]).reduce((sum:number,e:any) => {
           if (e.fee_override) return sum + Number(e.fee_override);
-          const prog = e.courses?.programs;
-          return sum + Number(prog?.billing_cycle === "termly" ? prog?.term_fee : (prog?.monthly_fee ?? 0) * 3);
+          const p = e.courses?.programs;
+          return sum + Number(p?.billing_cycle==="termly" ? p?.term_fee : (p?.monthly_fee??0)*3);
         }, 0);
-        const now = new Date();
+        const n = new Date();
         return {
-          invoice_number: `TINV-${term?.year}-T${term?.term_number}-${Math.random().toString(36).slice(2,6).toUpperCase()}`,
-          student_id: s.id,
-          period_month: now.getMonth() + 1,
-          period_year: term?.year ?? now.getFullYear(),
-          issue_date: now.toISOString().slice(0, 10),
-          due_date: term?.start_date ?? now.toISOString().slice(0, 10),
+          invoice_number:`TINV-${term?.year}-T${term?.term_number}-${Math.random().toString(36).slice(2,6).toUpperCase()}`,
+          student_id: s.id, period_month: n.getMonth()+1, period_year: term?.year??n.getFullYear(),
+          issue_date: n.toISOString().slice(0,10), due_date: term?.start_date??n.toISOString().slice(0,10),
           subtotal: total, total_amount: total, amount_paid: 0, amount_outstanding: total,
-          status: "sent", billing_type: "termly", term_id: termId,
+          status:"sent", billing_type:"termly", term_id: termId,
         };
       }));
-
       const { error } = await supabase.from("invoices").insert(rows);
       if (error) throw error;
       toast.success(`Generated ${rows.length} termly invoices for ${term?.name}`);
-      qc.invalidateQueries({ queryKey: ["invoices-list"] });
       onGenerated();
-    } catch (e: any) { toast.error(e.message); } finally { setGenerating(false); }
+    } catch(e:any) { toast.error(e.message); } finally { setGenerating(false); }
   }
-
   return (
-    <div className="border border-accent/30 rounded-xl bg-accent/5 p-4 space-y-3">
+    <div className="border border-accent/30 rounded-xl bg-accent/5 p-4 space-y-3 mb-2">
       <div className="text-sm font-semibold text-accent">Termly Invoice Generator</div>
       <div className="flex flex-wrap gap-2">
-        <select value={termId} onChange={(e) => setTermId(e.target.value)}
-          className="bg-background border border-input rounded-md px-3 py-2 text-sm flex-1 min-w-[180px]">
+        <select value={termId} onChange={(e) => setTermId(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm flex-1 min-w-[180px]">
           <option value="">— Select term —</option>
-          {(terms ?? []).map((t: any) => (
-            <option key={t.id} value={t.id}>{t.name}{t.is_current ? " ★" : ""}</option>
-          ))}
+          {(terms??[]).map((t:any) => <option key={t.id} value={t.id}>{t.name}{t.is_current?" ★":""}</option>)}
         </select>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="bg-background border border-input rounded-md px-3 py-2 text-sm">
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
           <option value="institution">Institutions</option>
           <option value="junior">Juniors</option>
           <option value="teen">Teens</option>
           <option value="adult">Adults</option>
         </select>
-        <button onClick={generate} disabled={generating || !termId}
+        <button onClick={generate} disabled={generating||!termId}
           className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-4 py-2 text-sm font-medium disabled:opacity-50">
-          {generating ? "Generating…" : "Generate Termly Invoices"}
+          {generating?"Generating…":"Generate"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── PAYMENTS ── */
+function PaymentsTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery({
+    queryKey:["payments-list"],
+    queryFn: async () => (await supabase.from("payments")
+      .select("*,students(first_name,last_name,admission_number)").order("payment_date",{ascending:false}).limit(50)).data??[],
+  });
+  return (
+    <PageCard title="Payments" action={
+      (user?.role==="super_admin"||user?.role==="finance_admin"||user?.role==="dice_admin") &&
+      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4"/>Record Payment</button>
+    }>
+      <table className="w-full text-sm">
+        <thead><tr className="text-left text-muted-foreground border-b border-border">
+          <th className="py-2 pr-3">Receipt #</th><th className="py-2 pr-3">Student</th>
+          <th className="py-2 pr-3">Method</th><th className="py-2 pr-3">Date</th><th className="py-2 text-right">Amount</th>
+        </tr></thead>
+        <tbody>
+          {(data??[]).map((p:any) => (
+            <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
+              <td className="py-2.5 pr-3 font-mono text-xs">{p.receipt_number}</td>
+              <td className="py-2.5 pr-3">{p.students?.first_name} {p.students?.last_name}</td>
+              <td className="py-2.5 pr-3 capitalize">{p.payment_method}</td>
+              <td className="py-2.5 pr-3 text-muted-foreground text-xs">{p.payment_date}</td>
+              <td className="py-2.5 text-right font-bold text-success">{formatKES(p.amount)}</td>
+            </tr>
+          ))}
+          {!data?.length && <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No payments yet</td></tr>}
+        </tbody>
+      </table>
+      {open && <PaymentForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["payments-list"]}); }}/>}
+    </PageCard>
+  );
+}
+
+function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
+  const { user } = useAuth();
+  const [studentId, setStudentId] = useState("");
+  const [form, setForm] = useState({ amount:"", payment_method:"MPesa", mpesa_code:"", notes:"", payment_date: new Date().toISOString().slice(0,10) });
+  const [saving, setSaving] = useState(false);
+  const { data: students } = useQuery({
+    queryKey:["students-active"],
+    queryFn: async () => {
+      let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active");
+      if (user?.role==="dice_admin") q = q.eq("branch_id", user.branch_id);
+      return (await q.order("first_name")).data??[];
+    },
+  });
+  async function save() {
+    if (!studentId||!form.amount) { toast.error("Select student and enter amount"); return; }
+    setSaving(true);
+    try {
+      const amount = Number(form.amount);
+      const { error } = await supabase.from("payments").insert({
+        student_id: studentId, amount,
+        receipt_number: generateReceiptNumber(),
+        payment_method: form.payment_method,
+        mpesa_code: form.mpesa_code||null,
+        notes: form.notes||null,
+        payment_date: form.payment_date,
+      });
+      if (error) throw error;
+      // Update student account
+      const { data: acct } = await supabase.from("student_accounts").select("*").eq("student_id",studentId).limit(1);
+      if (acct?.[0]) {
+        await supabase.from("student_accounts").update({
+          total_paid: Number(acct[0].total_paid||0) + amount,
+          total_outstanding: Math.max(0, Number(acct[0].total_outstanding||0) - amount),
+          account_status: Math.max(0, Number(acct[0].total_outstanding||0)-amount) <= 0 ? "clear" : "outstanding",
+          last_payment_date: form.payment_date,
+        }).eq("student_id", studentId);
+      }
+      toast.success("Payment recorded");
+      onSaved();
+    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6">
+        <h2 className="text-lg font-semibold mb-4">Record Payment</h2>
+        <div className="space-y-3">
+          <Field label="Student">
+            <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="">— Select student —</option>
+              {(students??[]).map((s:any) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.admission_number})</option>)}
+            </select>
+          </Field>
+          <Field label="Amount (KES)"><Input type="number" value={form.amount} onChange={(v) => setForm({...form,amount:v})}/></Field>
+          <Field label="Payment method">
+            <select value={form.payment_method} onChange={(e) => setForm({...form,payment_method:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option>MPesa</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
+            </select>
+          </Field>
+          {form.payment_method==="MPesa" && <Field label="MPesa code"><Input value={form.mpesa_code} onChange={(v) => setForm({...form,mpesa_code:v})} placeholder="e.g. QHK1234XYZ"/></Field>}
+          <Field label="Payment date"><Input type="date" value={form.payment_date} onChange={(v) => setForm({...form,payment_date:v})}/></Field>
+          <Field label="Notes"><Input value={form.notes} onChange={(v) => setForm({...form,notes:v})}/></Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">{saving?"Saving…":"Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ARREARS ── */
+function ArrearsTab() {
+  const { user } = useAuth();
+  const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*")).data??[] });
+  const { data } = useQuery({
+    queryKey:["arrears-list"],
+    queryFn: async () => {
+      let q = supabase.from("student_accounts")
+        .select("*,students(id,first_name,last_name,admission_number,branch_id,student_parents(parents(whatsapp,phone,first_name,last_name)))")
+        .gt("total_outstanding", 0).order("total_outstanding",{ascending:false});
+      return (await q).data ?? [];
+    },
+  });
+
+  function buildWhatsApp(acct:any, template:any) {
+    const student = acct.students;
+    const parent = student?.student_parents?.[0]?.parents;
+    const phone = (parent?.whatsapp || parent?.phone || "").replace(/\D/g,"");
+    if (!phone) { toast.error("No WhatsApp number for this student's parent"); return; }
+    const body = (template?.body ?? "")
+      .replace("{{student_name}}", `${student?.first_name} ${student?.last_name}`)
+      .replace("{{amount}}", Number(acct.total_outstanding).toLocaleString("en-KE"))
+      .replace("{{period}}", format(new Date(),"MMMM yyyy"))
+      .replace("{{term}}", "Current Term")
+      .replace("{{due_date}}", "5th of this month");
+    const url = `https://wa.me/${phone.startsWith("0") ? "254"+phone.slice(1) : phone}?text=${encodeURIComponent(body)}`;
+    window.open(url,"_blank");
+  }
+
+  const arrears = (data??[]);
+  const totalArrears = arrears.reduce((s:number,a:any)=>s+Number(a.total_outstanding),0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard label="Total Arrears" value={formatKES(totalArrears)} icon={<AlertCircle className="size-5"/>} tone="danger"/>
+        <StatCard label="Students Owing" value={arrears.length} icon={<Wallet className="size-5"/>} tone="warning"/>
+      </div>
+      <PageCard title="Arrears" subtitle="Students with outstanding balances">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-muted-foreground border-b border-border">
+              <th className="py-2 pr-3">Student</th><th className="py-2 pr-3">Adm #</th>
+              <th className="py-2 pr-3 text-right">Outstanding</th><th className="py-2 pr-3">Parent Contact</th><th className="py-2">WhatsApp</th>
+            </tr></thead>
+            <tbody>
+              {arrears.map((a:any) => {
+                const s = a.students;
+                const parent = s?.student_parents?.[0]?.parents;
+                const hasWA = !!(parent?.whatsapp||parent?.phone);
+                const template = (templates??[]).find((t:any)=>t.category==="arrears");
+                return (
+                  <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
+                    <td className="py-2.5 pr-3 font-medium">{s?.first_name} {s?.last_name}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs">{s?.admission_number}</td>
+                    <td className="py-2.5 pr-3 text-right font-bold text-danger">{formatKES(a.total_outstanding)}</td>
+                    <td className="py-2.5 pr-3 text-xs text-muted-foreground">{parent ? `${parent.first_name} ${parent.last_name}` : "—"}</td>
+                    <td className="py-2.5">
+                      <button onClick={() => buildWhatsApp(a, template)} disabled={!hasWA}
+                        title={hasWA?"Send WhatsApp reminder":"No WhatsApp number registered"}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${hasWA?"bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30 hover:bg-[#25D366]/20":"opacity-30 border-border text-muted-foreground cursor-not-allowed"}`}>
+                        <MessageCircle className="size-3.5"/>
+                        {hasWA?"Send":"No #"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!arrears.length && <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No outstanding arrears 🎉</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </PageCard>
+    </div>
+  );
+}
+
+/* ── EXPENDITURE ── */
+function ExpenditureTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const branchId = user?.branch_id ?? "";
+  const { data, isLoading } = useQuery({
+    queryKey:["expenditures-list", branchId],
+    queryFn: async () => (await supabase.from("expenditures").select("*").eq("branch_id", branchId).order("expense_date",{ascending:false})).data??[],
+  });
+  const total = (data??[]).reduce((s:number,e:any)=>s+Number(e.amount),0);
+  return (
+    <div className="space-y-4">
+      <StatCard label="Total Expenditure" value={formatKES(total)} icon={<TrendingDown className="size-5"/>} tone="danger"/>
+      <PageCard title="Expenditures" action={
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4"/>Add</button>
+      }>
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-muted-foreground border-b border-border">
+            <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Category</th>
+            <th className="py-2 pr-3">Description</th><th className="py-2 pr-3">Method</th><th className="py-2 text-right">Amount</th>
+          </tr></thead>
+          <tbody>
+            {isLoading && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
+            {(data??[]).map((e:any) => (
+              <tr key={e.id} className="border-b border-border/50 hover:bg-muted/30">
+                <td className="py-2.5 pr-3 text-xs text-muted-foreground">{e.expense_date}</td>
+                <td className="py-2.5 pr-3"><Badge className="bg-muted text-muted-foreground border-border">{e.category}</Badge></td>
+                <td className="py-2.5 pr-3">{e.description}</td>
+                <td className="py-2.5 pr-3 text-xs capitalize">{e.payment_method}</td>
+                <td className="py-2.5 text-right font-semibold text-danger">{formatKES(e.amount)}</td>
+              </tr>
+            ))}
+            {!isLoading && !data?.length && <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No expenditures recorded</td></tr>}
+          </tbody>
+        </table>
+      </PageCard>
+      {open && <ExpForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["expenditures-list"]}); }}/>}
+    </div>
+  );
+}
+
+function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ category:"", description:"", amount:"", expense_date: new Date().toISOString().slice(0,10), payment_method:"cash", receipt_ref:"" });
+  const [saving, setSaving] = useState(false);
+  const CATS = ["Rent","Utilities","Instructor Pay","Transport","Supplies","Marketing","Maintenance","Other"];
+  async function save() {
+    if (!form.category||!form.description||!form.amount) { toast.error("Fill all required fields"); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("expenditures").insert({
+        ...form, amount: Number(form.amount), branch_id: user?.branch_id??"",
+        created_by: user?.id,
+      });
+      if (error) throw error;
+      toast.success("Expenditure recorded");
+      onSaved();
+    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6">
+        <h2 className="text-lg font-semibold mb-4">Record Expenditure</h2>
+        <div className="space-y-3">
+          <Field label="Category">
+            <select value={form.category} onChange={(e) => setForm({...form,category:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="">— Select —</option>
+              {CATS.map((c) => <option key={c} value={c.toLowerCase().replace(/ /g,"_")}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="Description"><Input value={form.description} onChange={(v) => setForm({...form,description:v})}/></Field>
+          <Field label="Amount (KES)"><Input type="number" value={form.amount} onChange={(v) => setForm({...form,amount:v})}/></Field>
+          <Field label="Date"><Input type="date" value={form.expense_date} onChange={(v) => setForm({...form,expense_date:v})}/></Field>
+          <Field label="Payment method">
+            <select value={form.payment_method} onChange={(e) => setForm({...form,payment_method:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="cash">Cash</option><option value="mpesa">MPesa</option><option value="bank_transfer">Bank Transfer</option>
+            </select>
+          </Field>
+          <Field label="Receipt ref"><Input value={form.receipt_ref} onChange={(v) => setForm({...form,receipt_ref:v})} placeholder="Optional"/></Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">{saving?"Saving…":"Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── INCOME (Dice Arts) ── */
+function IncomeTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const branchId = user?.branch_id ?? "";
+  const { data, isLoading } = useQuery({
+    queryKey:["income-list", branchId],
+    queryFn: async () => (await supabase.from("income_records").select("*").eq("branch_id", branchId).order("income_date",{ascending:false})).data??[],
+  });
+  const totalIncome = (data??[]).reduce((s:number,r:any)=>s+Number(r.amount),0);
+  const totalCommission = (data??[]).reduce((s:number,r:any)=>s+Number(r.commission_amount||0),0);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard label="Total Income" value={formatKES(totalIncome)} icon={<TrendingUp className="size-5"/>} tone="success"/>
+        <StatCard label="PLA Commission" value={formatKES(totalCommission)} icon={<Receipt className="size-5"/>} tone="gold"/>
+      </div>
+      <PageCard title="Income Records" action={
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4"/>Add Income</button>
+      }>
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-muted-foreground border-b border-border">
+            <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Category</th>
+            <th className="py-2 pr-3">Description</th><th className="py-2 pr-3 text-right">Amount</th>
+            <th className="py-2 pr-3 text-right">Commission %</th><th className="py-2 text-right">PLA Due</th>
+          </tr></thead>
+          <tbody>
+            {isLoading && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
+            {(data??[]).map((r:any) => (
+              <tr key={r.id} className="border-b border-border/50 hover:bg-muted/30">
+                <td className="py-2.5 pr-3 text-xs text-muted-foreground">{r.income_date}</td>
+                <td className="py-2.5 pr-3 capitalize">{r.category}</td>
+                <td className="py-2.5 pr-3">{r.description}</td>
+                <td className="py-2.5 pr-3 text-right font-semibold text-success">{formatKES(r.amount)}</td>
+                <td className="py-2.5 pr-3 text-right text-muted-foreground">{r.commission_rate??0}%</td>
+                <td className="py-2.5 text-right font-semibold text-accent">{formatKES(r.commission_amount??0)}</td>
+              </tr>
+            ))}
+            {!isLoading && !data?.length && <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No income recorded</td></tr>}
+          </tbody>
+        </table>
+      </PageCard>
+      {open && <IncomeForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["income-list"]}); }}/>}
+    </div>
+  );
+}
+
+function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ category:"school_fees", description:"", amount:"", commission_rate:"", income_date: new Date().toISOString().slice(0,10), payment_method:"bank_transfer", reference:"" });
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    if (!form.description||!form.amount) { toast.error("Fill required fields"); return; }
+    setSaving(true);
+    try {
+      const amount = Number(form.amount);
+      const rate = Number(form.commission_rate)||0;
+      const { error } = await supabase.from("income_records").insert({
+        ...form, amount, commission_rate: rate,
+        commission_amount: Math.round(amount * rate / 100 * 100) / 100,
+        branch_id: user?.branch_id??"", created_by: user?.id,
+      });
+      if (error) throw error;
+      toast.success("Income recorded");
+      onSaved();
+    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6">
+        <h2 className="text-lg font-semibold mb-4">Record Income</h2>
+        <div className="space-y-3">
+          <Field label="Category">
+            <select value={form.category} onChange={(e) => setForm({...form,category:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="school_fees">School Fees</option>
+              <option value="commission">Commission</option>
+              <option value="grants">Grants</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Description"><Input value={form.description} onChange={(v) => setForm({...form,description:v})}/></Field>
+          <Field label="Amount (KES)"><Input type="number" value={form.amount} onChange={(v) => setForm({...form,amount:v})}/></Field>
+          <Field label="PLA Commission %">
+            <Input type="number" value={form.commission_rate} onChange={(v) => setForm({...form,commission_rate:v})} placeholder="e.g. 15"/>
+          </Field>
+          <div className="rounded-md bg-accent/10 border border-accent/20 px-3 py-2 text-sm">
+            PLA commission: <span className="font-bold text-accent">{formatKES((Number(form.amount)||0) * (Number(form.commission_rate)||0) / 100)}</span>
+          </div>
+          <Field label="Date"><Input type="date" value={form.income_date} onChange={(v) => setForm({...form,income_date:v})}/></Field>
+          <Field label="Reference"><Input value={form.reference} onChange={(v) => setForm({...form,reference:v})} placeholder="Invoice/receipt ref"/></Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">{saving?"Saving…":"Save"}</button>
+        </div>
       </div>
     </div>
   );
