@@ -1,0 +1,58 @@
+name: Deploy to Netlify
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Build
+        run: npm run build
+        env:
+          NITRO_PRESET: netlify
+          NODE_VERSION: '22'
+      
+      - name: Create index.html
+        run: |
+          CSS=$(ls dist/client/assets/*.css | head -1 | xargs basename)
+          JS=$(ls dist/client/assets/index-*.js | head -1 | xargs basename)
+          cat > dist/client/index.html << HTML
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <meta name="theme-color" content="#2d1b69" />
+              <title>PrimeLuck Arts Academy</title>
+              <link rel="manifest" href="/manifest.webmanifest" />
+              <link rel="stylesheet" href="/assets/$CSS" />
+            </head>
+            <body>
+              <div id="app"></div>
+              <script type="module" src="/assets/$JS"></script>
+            </body>
+          </html>
+          HTML
+          echo "/* /index.html 200" > dist/client/_redirects
+      
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3
+        with:
+          publish-dir: './dist/client'
+          production-branch: main
+          production-deploy: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: 14b02df2-24d0-4ea2-a764-81c11e60501c
