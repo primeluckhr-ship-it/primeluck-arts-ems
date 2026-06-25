@@ -32,23 +32,27 @@ function AdminDash() {
     queryFn: async () => {
       const monthStart = formatISO(startOfMonth(new Date()), { representation: "date" });
       const today = formatISO(new Date(), { representation: "date" });
-      const [students, courses, payments, accounts, attendance, enrollments] = await Promise.all([
+      const [students, courses, payments, accounts, attendance, enrollments, studentTypes] = await Promise.all([
         supabase.from("students").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("courses").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("payments").select("amount,payment_date").gte("payment_date", monthStart),
         supabase.from("student_accounts").select("total_outstanding"),
         supabase.from("attendance_records").select("status,sessions!inner(session_date)").gte("sessions.session_date", today),
         supabase.from("students").select("id", { count: "exact", head: true }).gte("enrollment_date", monthStart),
+        supabase.from("students").select("student_type").eq("status","active"),
       ]);
       const revenue = (payments.data ?? []).reduce((s, p: any) => s + Number(p.amount), 0);
       const arrears = (accounts.data ?? []).reduce((s, a: any) => s + Number(a.total_outstanding), 0);
       const present = (attendance.data ?? []).filter((r: any) => r.status === "present").length;
       const rate = attendance.data && attendance.data.length ? Math.round((present / attendance.data.length) * 100) : 0;
+      const types = { junior:0, teen:0, adult:0, institution:0 };
+      (studentTypes.data??[]).forEach((s:any) => { if(types[s.student_type as keyof typeof types]!==undefined) types[s.student_type as keyof typeof types]++; });
       return {
         students: students.count ?? 0,
         courses: courses.count ?? 0,
         revenue, arrears, attendanceRate: rate,
         newEnrollments: enrollments.count ?? 0,
+        types,
       };
     },
   });
@@ -83,6 +87,23 @@ function AdminDash() {
         <StatCard label="Attendance Today" value={stats.data ? `${stats.data.attendanceRate}%` : "—"} icon={<CalendarCheck className="size-5" />} tone="success" />
         <StatCard label="New (Month)" value={stats.data?.newEnrollments ?? "—"} icon={<TrendingUp className="size-5" />} />
       </div>
+
+      {/* Student type breakdown */}
+      {stats.data?.types && (
+        <div className="grid grid-cols-4 gap-2">
+          {([
+            { type:"junior",      label:"Juniors",      cls:"border-blue-500/30 text-blue-400 bg-blue-500/10" },
+            { type:"teen",        label:"Teens",        cls:"border-purple-500/30 text-purple-400 bg-purple-500/10" },
+            { type:"adult",       label:"Adults",       cls:"border-success/30 text-success bg-success/10" },
+            { type:"institution", label:"Institutions", cls:"border-orange-500/30 text-orange-400 bg-orange-500/10" },
+          ]).map((s) => (
+            <div key={s.type} className={`rounded-xl border p-3 text-center ${s.cls}`}>
+              <div className="text-xl font-bold">{stats.data!.types[s.type as keyof typeof stats.data.types]}</div>
+              <div className="text-xs font-medium">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <PageCard title="Revenue — Last 6 months" subtitle="Monthly collected in KES">
