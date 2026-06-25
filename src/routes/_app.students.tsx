@@ -36,8 +36,8 @@ function StudentsPage() {
       const isSuper = user?.role === "super_admin";
       const [{ data: students }, { data: accounts }] = await Promise.all([
         (isSuper
-          ? supabase.from("students").select("*")
-          : supabase.from("students").select("*").eq("branch_id", user?.branch_id ?? "")
+          ? supabase.from("students").select("*,institutions(name)")
+          : supabase.from("students").select("*,institutions(name)").eq("branch_id", user?.branch_id ?? "")
         ).order("created_at", { ascending: false }),
         supabase.from("student_accounts").select("student_id,total_outstanding"),
       ]);
@@ -127,7 +127,7 @@ function StudentsPage() {
             <thead><tr className="text-left text-muted-foreground border-b border-border">
               <th className="py-2 pr-3">Admission #</th>
               <th className="py-2 pr-3">Name</th>
-              <th className="py-2 pr-3">Type</th>
+              <th className="py-2 pr-3">Type / Institution</th>
               <th className="py-2 pr-3">Level</th>
               <th className="py-2 pr-3">Status</th>
               <th className="py-2 text-right pr-3">Balance</th>
@@ -143,6 +143,9 @@ function StudentsPage() {
                   <td className="py-2.5 pr-3 font-medium">{s.first_name} {s.last_name}</td>
                   <td className="py-2.5 pr-3">
                     <Badge className={TYPE_COLORS[s.student_type ?? "adult"]}>{TYPE_LABELS[s.student_type ?? "adult"]}</Badge>
+                    {s.student_type === "institution" && s.institutions?.name && (
+                      <div className="text-xs text-muted-foreground mt-0.5">{s.institutions.name}</div>
+                    )}
                   </td>
                   <td className="py-2.5 pr-3 text-muted-foreground">{s.skill_level || "—"}</td>
                   <td className="py-2.5 pr-3"><Badge className={getStatusColor(s.status)}>{s.status === "left" ? "Left" : s.status === "graduated" ? "Graduated 🎓" : s.status}</Badge></td>
@@ -205,8 +208,12 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
   const [saving, setSaving] = useState(false);
 
   const { data: institutions } = useQuery({
-    queryKey: ["institutions-list"],
-    queryFn: async () => (await supabase.from("institutions").select("id,name").eq("is_active", true).order("name")).data ?? [],
+    queryKey: ["institutions-list", user?.branch_id],
+    queryFn: async () => {
+      let q = supabase.from("institutions").select("id,name").eq("is_active", true).order("name");
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      return (await q).data ?? [];
+    },
   });
 
   const [institutionId, setInstitutionId] = useState(initial?.institution_id ?? "");
@@ -266,11 +273,13 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
           </div>
           {form.student_type === "institution" && (
             <div className="mt-2">
+              <label className="block text-xs text-muted-foreground mb-1 font-medium">Linked Institution <span className="text-danger">*</span></label>
               <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}
                 className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
                 <option value="">— Select institution —</option>
                 {(institutions ?? []).map((i: any) => <option key={i.id} value={i.id}>{i.name}</option>)}
               </select>
+              {!institutionId && <p className="text-xs text-warning mt-1">Select which institution this student belongs to</p>}
             </div>
           )}
         </div>
