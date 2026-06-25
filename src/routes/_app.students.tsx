@@ -189,10 +189,13 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
       const admission_number = initial?.admission_number || `${prefix}${String(lastNum + 1).padStart(4, "0")}`;
 
       const payload = { 
-        ...form, 
+        ...form,
         admission_number,
         institution_id: institutionId || null,
         branch_id: user?.branch_id ?? "",
+        // Date fields must be null (not "") for Postgres DATE type
+        date_of_birth:    form.date_of_birth    || null,
+        enrollment_date:  form.enrollment_date  || null,
         // map parent_phone to emergency_contact_phone for backwards compat
         emergency_contact_phone: form.parent_phone || null,
       };
@@ -214,57 +217,81 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">{initial ? "Edit Student" : "Add Student"}</h2>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <Field label="Student Type" className="sm:col-span-2">
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(TYPE_LABELS).map(([type, label]) => (
-                <button key={type} type="button"
-                  onClick={() => setForm({ ...form, student_type: type })}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${form.student_type === type ? TYPE_COLORS[type] + " ring-2 ring-offset-1 ring-offset-card ring-current" : "border-border text-muted-foreground hover:border-accent"}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </Field>
+        {/* ── Section 1: Student type ── */}
+        <div className="mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-2">Student type</p>
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(TYPE_LABELS).map(([type, label]) => (
+              <button key={type} type="button"
+                onClick={() => setForm({ ...form, student_type: type })}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${form.student_type === type ? TYPE_COLORS[type] + " ring-2 ring-offset-1 ring-offset-card ring-current" : "border-border text-muted-foreground hover:border-accent"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
           {form.student_type === "institution" && (
-            <Field label="Institution" className="sm:col-span-2">
+            <div className="mt-2">
               <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}
                 className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
                 <option value="">— Select institution —</option>
                 {(institutions ?? []).map((i: any) => <option key={i.id} value={i.id}>{i.name}</option>)}
               </select>
-            </Field>
+            </div>
           )}
-          <Field label="Status">
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-              <option>active</option><option>inactive</option><option>suspended</option>
-            </select>
-          </Field>
+        </div>
+
+        {/* ── Section 2: Personal details ── */}
+        <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
           <Field label="First name"><Input value={form.first_name} onChange={(v) => setForm({ ...form, first_name: v })} /></Field>
           <Field label="Last name"><Input value={form.last_name} onChange={(v) => setForm({ ...form, last_name: v })} /></Field>
-          <Field label="Date of birth"><Input type="date" value={form.date_of_birth} onChange={(v) => setForm({ ...form, date_of_birth: v })} /></Field>
+          <Field label="Date of birth">
+            <input type="date" value={form.date_of_birth}
+              onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
+          </Field>
           <Field label="Gender">
             <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
               className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-              <option value="">—</option><option>male</option><option>female</option><option>other</option>
+              <option value="">— Select —</option><option value="male">Male</option>
+              <option value="female">Female</option><option value="other">Other</option>
             </select>
           </Field>
-          <Field label="School"><Input value={form.school_name} onChange={(v) => setForm({ ...form, school_name: v })} /></Field>
-          <Field label="Grade"><Input value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} /></Field>
+          <Field label="Parent / Guardian Phone" className="sm:col-span-2">
+            <Input value={form.parent_phone} onChange={(v) => setForm({ ...form, parent_phone: v })} placeholder="+254… — WhatsApp reminders sent here" />
+          </Field>
+        </div>
+
+        {/* ── Section 3: Academic info ── */}
+        <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
+          <Field label="School / Institution name"><Input value={form.school_name} onChange={(v) => setForm({ ...form, school_name: v })} /></Field>
+          <Field label="Grade / Class"><Input value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} placeholder="e.g. Form 2, Grade 5" /></Field>
           <Field label="Skill level">
             <select value={form.skill_level} onChange={(e) => setForm({ ...form, skill_level: e.target.value })}
               className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
             </select>
           </Field>
-          <Field label="Enrollment date"><Input type="date" value={form.enrollment_date} onChange={(v) => setForm({ ...form, enrollment_date: v })} /></Field>
-          <Field label="Parent / Guardian Phone" className="sm:col-span-2">
-            <Input value={form.parent_phone} onChange={(v) => setForm({ ...form, parent_phone: v })} placeholder="+254… — used for WhatsApp reminders" />
+          <Field label="Enrollment date">
+            <input type="date" value={form.enrollment_date}
+              onChange={(e) => setForm({ ...form, enrollment_date: e.target.value })}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
+          </Field>
+        </div>
+
+        {/* ── Section 4: Status & notes ── */}
+        <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
+          <Field label="Status">
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </select>
           </Field>
           <Field label="Notes" className="sm:col-span-2">
             <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={3} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
+              rows={2} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
+              placeholder="Any additional notes…" />
           </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">
