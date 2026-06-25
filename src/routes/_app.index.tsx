@@ -27,19 +27,28 @@ function Dashboard() {
 }
 
 function AdminDash() {
+  const { user } = useAuth();
+  const isSuper = user?.role === "super_admin";
+  const branch = user?.branch_id ?? "";
+
+  // Apply branch filter for non-super-admin users
+  function br<T extends object>(q: T): T {
+    return (isSuper ? q : (q as any).eq("branch_id", branch)) as T;
+  }
+
   const stats = useQuery({
-    queryKey: ["admin-stats"],
+    queryKey: ["admin-stats", branch, user?.role],
     queryFn: async () => {
       const monthStart = formatISO(startOfMonth(new Date()), { representation: "date" });
       const today = formatISO(new Date(), { representation: "date" });
       const [students, courses, payments, accounts, attendance, enrollments, studentTypes] = await Promise.all([
-        supabase.from("students").select("id", { count: "exact", head: true }).eq("status", "active"),
-        supabase.from("courses").select("id", { count: "exact", head: true }).eq("status", "active"),
+        br(supabase.from("students").select("id", { count: "exact", head: true }).eq("status", "active")),
+        br(supabase.from("courses").select("id", { count: "exact", head: true }).eq("status", "active")),
         supabase.from("payments").select("amount,payment_date").gte("payment_date", monthStart),
         supabase.from("student_accounts").select("total_outstanding"),
         supabase.from("attendance_records").select("status,sessions!inner(session_date)").gte("sessions.session_date", today),
-        supabase.from("students").select("id", { count: "exact", head: true }).gte("enrollment_date", monthStart),
-        supabase.from("students").select("student_type").eq("status","active"),
+        br(supabase.from("students").select("id", { count: "exact", head: true }).gte("enrollment_date", monthStart)),
+        br(supabase.from("students").select("student_type").eq("status","active")),
       ]);
       const revenue = (payments.data ?? []).reduce((s, p: any) => s + Number(p.amount), 0);
       const arrears = (accounts.data ?? []).reduce((s, a: any) => s + Number(a.total_outstanding), 0);
@@ -58,7 +67,7 @@ function AdminDash() {
   });
 
   const chartData = useQuery({
-    queryKey: ["admin-revenue-chart"],
+    queryKey: ["admin-revenue-chart", branch, user?.role],
     queryFn: async () => {
       const out: { month: string; revenue: number; expenses: number }[] = [];
       for (let i = 5; i >= 0; i--) {
@@ -66,8 +75,10 @@ function AdminDash() {
         const start = formatISO(startOfMonth(d), { representation: "date" });
         const end = formatISO(endOfMonth(d), { representation: "date" });
         const [rev, exp] = await Promise.all([
-          supabase.from("payments").select("amount").gte("payment_date", start).lte("payment_date", end),
-          supabase.from("expenditures").select("amount").gte("expense_date", start).lte("expense_date", end),
+          isSuper ? supabase.from("payments").select("amount").gte("payment_date", start).lte("payment_date", end)
+            : supabase.from("payments").select("amount").gte("payment_date", start).lte("payment_date", end).eq("branch_id", branch),
+          isSuper ? supabase.from("expenditures").select("amount").gte("expense_date", start).lte("expense_date", end)
+            : supabase.from("expenditures").select("amount").gte("expense_date", start).lte("expense_date", end).eq("branch_id", branch),
         ]);
         out.push({
           month: format(d, "MMM"),
