@@ -38,7 +38,7 @@ function TimetablePage() {
   });
 
   const { data: sessions } = useQuery({
-    queryKey: ["timetable-sessions", format(weekStart,"yyyy-MM-dd")],
+    queryKey: ["timetable-sessions", format(weekStart,"yyyy-MM-dd"), user?.branch_id],
     queryFn: async () => {
       const from = format(weekStart,"yyyy-MM-dd");
       const to   = format(weekEnd,"yyyy-MM-dd");

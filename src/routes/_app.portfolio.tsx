@@ -26,7 +26,7 @@ function PortfolioPage() {
     queryKey: ["students-portfolio", user?.branch_id],
     queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name,student_type").eq("status","active").order("first_name");
-      if (!isAdmin) q = q.eq("branch_id", user?.branch_id ?? "");
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
       return (await q).data ?? [];
     },
     enabled: isAdmin || isInstructor,

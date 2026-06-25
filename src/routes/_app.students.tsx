@@ -29,10 +29,14 @@ function StudentsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["students-list"],
+    queryKey: ["students-list", user?.branch_id, user?.role],
     queryFn: async () => {
+      const isSuper = user?.role === "super_admin";
       const [{ data: students }, { data: accounts }] = await Promise.all([
-        supabase.from("students").select("*,programs(name)").order("created_at", { ascending: false }),
+        (isSuper
+          ? supabase.from("students").select("*")
+          : supabase.from("students").select("*").eq("branch_id", user?.branch_id ?? "")
+        ).order("created_at", { ascending: false }),
         supabase.from("student_accounts").select("student_id,total_outstanding"),
       ]);
       return (students ?? []).map((s: any) => ({
@@ -54,7 +58,7 @@ function StudentsPage() {
   // Counts per type for summary bar
   const counts = useMemo(() => {
     const c: Record<string, number> = { junior: 0, teen: 0, adult: 0, institution: 0 };
-    (data ?? []).forEach((s: any) => { if (c[s.student_type] !== undefined) c[s.student_type]++; });
+    (data ?? []).forEach((s: any) => { const t = s.student_type ?? "adult"; if (c[t] !== undefined) c[t]++; });
     return c;
   }, [data]);
 
@@ -144,7 +148,7 @@ function StudentsPage() {
         <StudentForm
           initial={editing}
           onClose={() => setOpen(false)}
-          onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["students-list"] }); }}
+          onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["students-list"], exact: false }); }}
         />
       )}
     </div>

@@ -17,8 +17,12 @@ function ProgramsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["programs-list"],
-    queryFn: async () => (await supabase.from("programs").select("*").order("name")).data ?? [],
+    queryKey: ["programs-list", user?.branch_id],
+    queryFn: async () => {
+      let q = supabase.from("programs").select("*").order("name");
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      return (await q).data ?? [];
+    },
   });
 
   return (

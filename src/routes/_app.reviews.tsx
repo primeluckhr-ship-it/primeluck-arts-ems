@@ -27,8 +27,12 @@ function FeedbackAdminPage() {
   const [filter, setFilter] = useState("all");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["feedback-list"],
-    queryFn: async () => (await supabase.from("feedback").select("*").order("created_at", { ascending: false })).data ?? [],
+    queryKey: ["feedback-list", user?.branch_id],
+    queryFn: async () => {
+      let q = supabase.from("feedback").select("*").order("created_at", { ascending: false });
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      return (await q).data ?? [];
+    },
   });
 
   const filtered = (data??[]).filter((f:any) => filter==="all" || f.status===filter);

@@ -20,8 +20,12 @@ function AnnouncementsPage() {
   const [editing, setEditing] = useState<any>(null);
 
   const { data } = useQuery({
-    queryKey: ["announcements"],
-    queryFn: async () => (await supabase.from("announcements").select("*").eq("is_published", true).order("created_at", { ascending: false })).data ?? [],
+    queryKey: ["announcements", user?.branch_id],
+    queryFn: async () => {
+      let q = supabase.from("announcements").select("*").eq("is_published", true).order("created_at", { ascending: false });
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      return (await q).data ?? [];
+    },
   });
 
   const urgent = (data ?? []).filter((a: any) => a.priority === "urgent");

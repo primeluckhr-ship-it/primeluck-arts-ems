@@ -53,8 +53,8 @@ function AssessmentsPage() {
     queryKey: ["assessments-list", scopedIds.data],
     enabled: scopedIds.isSuccess,
     queryFn: async () => {
-      let q = supabase.from("assessments").select("*,students(first_name,last_name,admission_number),courses(name)").order("assessment_date", { ascending: false });
-      if (scopedIds.data) q = q.in("student_id", scopedIds.data);
+      let q = supabase.from("assessments").select("*,students(first_name,last_name,admission_number,branch_id),courses(name)").order("assessment_date", { ascending: false });
+      if (scopedIds.data) q = q.in("student_id", scopedIds.data.length ? scopedIds.data : ["__none__"]);
       return (await q).data ?? [];
     },
   });
@@ -94,8 +94,16 @@ function AssessmentsPage() {
 
 function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
-  const { data: students } = useQuery({ queryKey: ["assess-students"], queryFn: async () => (await supabase.from("students").select("id,first_name,last_name")).data ?? [] });
-  const { data: courses } = useQuery({ queryKey: ["assess-courses"], queryFn: async () => (await supabase.from("courses").select("id,name")).data ?? [] });
+  const { data: students } = useQuery({ queryKey: ["assess-students", user?.branch_id], queryFn: async () => {
+      let q = supabase.from("students").select("id,first_name,last_name").eq("status","active");
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      return (await q).data ?? [];
+    } });
+  const { data: courses } = useQuery({ queryKey: ["assess-courses", user?.branch_id], queryFn: async () => {
+      let q = supabase.from("courses").select("id,name").eq("status","active");
+      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      return (await q).data ?? [];
+    } });
   const [form, setForm] = useState({
     student_id: "", course_id: "", title: "", assessment_date: new Date().toISOString().slice(0, 10),
     score: 0, max_score: 100, notes: "",

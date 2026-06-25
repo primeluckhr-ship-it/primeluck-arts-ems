@@ -169,7 +169,7 @@ function EnrollmentReport() {
 
 function AttendanceReport({ from, to }: { from: string; to: string }) {
   const { data } = useQuery({
-    queryKey: ["att-report", from, to],
+    queryKey: ["att-report", from, to, user?.branch_id],
     queryFn: async () => {
       const { data: records } = await supabase.from("attendance_records").select("status,session_id,sessions!inner(session_date,courses(name))").gte("sessions.session_date", from).lte("sessions.session_date", to);
       const byStatus: Record<string, number> = {};

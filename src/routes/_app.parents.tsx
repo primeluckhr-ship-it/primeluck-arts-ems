@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase }
+import { useAuth } from "@/lib/auth"; from "@/lib/supabase";
 import { PageCard, Badge } from "@/components/app-shell";
 import { Plus, Pencil, MessageCircle, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -10,14 +11,16 @@ import { Field, Input } from "./_app.students";
 export const Route = createFileRoute("/_app/parents")({ component: ParentsPage });
 
 function ParentsPage() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [search, setSearch] = useState("");
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["parents-list"],
+    queryKey: ["parents-list", user?.branch_id],
     queryFn: async () => {
+      // parents have no branch_id — filter via student_parents join
       const { data } = await supabase.from("parents")
         .select("*,student_parents(is_primary,students(first_name,last_name,admission_number,status))")
         .order("first_name");

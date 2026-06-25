@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase }
+import { useAuth } from "@/lib/auth"; from "@/lib/supabase";
 import { PageCard, Badge } from "@/components/app-shell";
 import { Plus, Pencil, Phone, Mail, BookOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -15,15 +16,17 @@ const STATUS_COLORS: Record<string,string> = {
 };
 
 function InstructorsPage() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["instructors-full"],
+    queryKey: ["instructors-full", user?.branch_id],
     queryFn: async () => {
-      const { data: insts } = await supabase.from("instructors")
-        .select("*").order("first_name");
+      let instQ = supabase.from("instructors").select("*").order("first_name");
+      if (user?.role !== "super_admin") instQ = instQ.eq("branch_id", user?.branch_id ?? "");
+      const { data: insts } = await instQ;
       
       // Get course count per instructor
       const { data: courses } = await supabase.from("courses")
