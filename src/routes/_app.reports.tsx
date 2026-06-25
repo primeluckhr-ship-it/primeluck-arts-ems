@@ -299,13 +299,13 @@ function CategoriesTab() {
   const { data: programs } = useQuery({
     queryKey: ["programs-cat", user?.branch_id],
     queryFn: async () => {
-      let q = supabase.from("programs").select("id,name,category,billing_cycle,monthly_fee,term_fee,status");
+      let q = supabase.from("courses").select("id,name,category,billing_cycle,monthly_fee,term_fee,status");
       if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
       return (await q).data ?? [];
     },
   });
   const { data: enrollments } = useQuery({
-    queryKey: ["enroll-cat", user?.branch_id],
+    queryKey: ["courses-cat", user?.branch_id],
     queryFn: async () => {
       const { data: courses } = await supabase.from("courses").select("id,program_id,name,branch_id");
       const { data: enroll } = await supabase.from("course_enrollments").select("course_id,status");
@@ -351,7 +351,7 @@ function CategoriesTab() {
                 <td className="p-3 font-medium">{p.name}</td>
                 <td className="p-3 capitalize text-xs">{(p.category||"general").replace(/_/g," ")}</td>
                 <td className="p-3 text-xs capitalize">{p.billing_cycle}</td>
-                <td className="p-3 text-right">{formatKES(p.billing_cycle==="termly" ? p.term_fee : p.monthly_fee)}</td>
+                <td className="p-3 text-right">{formatKES(p.billing_cycle==="per_session" ? p.session_fee : p.billing_cycle==="termly" ? p.term_fee : p.monthly_fee)}</td>
               </tr>
             ))}
             {!programs?.length && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No programs yet</td></tr>}
