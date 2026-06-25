@@ -10,17 +10,25 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
+import { Route as AppTimetableRouteImport } from './routes/_app.timetable'
 import { Route as AppStudentsRouteImport } from './routes/_app.students'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppScheduleRouteImport } from './routes/_app.schedule'
+import { Route as AppReviewsRouteImport } from './routes/_app.reviews'
 import { Route as AppReportsRouteImport } from './routes/_app.reports'
+import { Route as AppProjectsRouteImport } from './routes/_app.projects'
 import { Route as AppProgramsRouteImport } from './routes/_app.programs'
 import { Route as AppPortfolioRouteImport } from './routes/_app.portfolio'
+import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
 import { Route as AppParentsRouteImport } from './routes/_app.parents'
+import { Route as AppLessonsRouteImport } from './routes/_app.lessons'
 import { Route as AppInstructorsRouteImport } from './routes/_app.instructors'
+import { Route as AppFundRequestsRouteImport } from './routes/_app.fund-requests'
 import { Route as AppFinanceRouteImport } from './routes/_app.finance'
+import { Route as AppDiceInstitutionsRouteImport } from './routes/_app.dice-institutions'
 import { Route as AppCoursesRouteImport } from './routes/_app.courses'
 import { Route as AppChildrenRouteImport } from './routes/_app.children'
 import { Route as AppAuditRouteImport } from './routes/_app.audit'
@@ -29,62 +37,15 @@ import { Route as AppAssessmentsRouteImport } from './routes/_app.assessments'
 import { Route as AppAnnouncementsRouteImport } from './routes/_app.announcements'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AppStudentsIdRouteImport } from './routes/_app.students.$id'
-import { Route as AppProjectsRouteImport } from './routes/_app.projects'
-import { Route as AppLessonsRouteImport } from './routes/_app.lessons'
-import { Route as AppDiceInstitutionsRouteImport } from './routes/_app.dice-institutions'
-import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as AppReviewsRouteImport } from './routes/_app.reviews'
-import { Route as AppTimetableRouteImport } from './routes/_app.timetable'
-import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
-import { Route as AppFundRequestsRouteImport } from './routes/_app.fund-requests'
 
-
-
-const AppProjectsRoute = AppProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppLessonsRoute = AppLessonsRouteImport.update({
-  id: '/lessons',
-  path: '/lessons',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDiceInstitutionsRoute = AppDiceInstitutionsRouteImport.update({
-  id: '/dice-institutions',
-  path: '/dice-institutions',
-  getParentRoute: () => AppRoute,
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const FeedbackRoute = FeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
-  getParentRoute: () => rootRoute,
-} as any)
-const AppReviewsRoute = AppReviewsRouteImport.update({
-  id: '/reviews',
-  path: '/reviews',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppTimetableRoute = AppTimetableRouteImport.update({
-  id: '/timetable',
-  path: '/timetable',
-  getParentRoute: () => AppRoute,
-} as any)
-
-const AppPayrollRoute = AppPayrollRouteImport.update({
-  id: '/payroll',
-  path: '/payroll',
-  getParentRoute: () => AppRoute,
-} as any)
-
-const AppFundRequestsRoute = AppFundRequestsRouteImport.update({
-  id: '/fund-requests',
-  path: '/fund-requests',
-  getParentRoute: () => AppRoute,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -94,6 +55,11 @@ const AppRoute = AppRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTimetableRoute = AppTimetableRouteImport.update({
+  id: '/timetable',
+  path: '/timetable',
   getParentRoute: () => AppRoute,
 } as any)
 const AppStudentsRoute = AppStudentsRouteImport.update({
@@ -111,9 +77,19 @@ const AppScheduleRoute = AppScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReviewsRoute = AppReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProgramsRoute = AppProgramsRouteImport.update({
@@ -126,9 +102,19 @@ const AppPortfolioRoute = AppPortfolioRouteImport.update({
   path: '/portfolio',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppParentsRoute = AppParentsRouteImport.update({
   id: '/parents',
   path: '/parents',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLessonsRoute = AppLessonsRouteImport.update({
+  id: '/lessons',
+  path: '/lessons',
   getParentRoute: () => AppRoute,
 } as any)
 const AppInstructorsRoute = AppInstructorsRouteImport.update({
@@ -136,9 +122,19 @@ const AppInstructorsRoute = AppInstructorsRouteImport.update({
   path: '/instructors',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFundRequestsRoute = AppFundRequestsRouteImport.update({
+  id: '/fund-requests',
+  path: '/fund-requests',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppFinanceRoute = AppFinanceRouteImport.update({
   id: '/finance',
   path: '/finance',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDiceInstitutionsRoute = AppDiceInstitutionsRouteImport.update({
+  id: '/dice-institutions',
+  path: '/dice-institutions',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCoursesRoute = AppCoursesRouteImport.update({
@@ -184,6 +180,7 @@ const AppStudentsIdRoute = AppStudentsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/feedback': typeof FeedbackRoute
   '/login': typeof LoginRoute
   '/account': typeof AppAccountRoute
   '/announcements': typeof AppAnnouncementsRoute
@@ -192,18 +189,26 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AppAuditRoute
   '/children': typeof AppChildrenRoute
   '/courses': typeof AppCoursesRoute
+  '/dice-institutions': typeof AppDiceInstitutionsRoute
   '/finance': typeof AppFinanceRoute
+  '/fund-requests': typeof AppFundRequestsRoute
   '/instructors': typeof AppInstructorsRoute
+  '/lessons': typeof AppLessonsRoute
   '/parents': typeof AppParentsRoute
+  '/payroll': typeof AppPayrollRoute
   '/portfolio': typeof AppPortfolioRoute
   '/programs': typeof AppProgramsRoute
+  '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
+  '/reviews': typeof AppReviewsRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
   '/students': typeof AppStudentsRouteWithChildren
+  '/timetable': typeof AppTimetableRoute
   '/students/$id': typeof AppStudentsIdRoute
 }
 export interface FileRoutesByTo {
+  '/feedback': typeof FeedbackRoute
   '/login': typeof LoginRoute
   '/account': typeof AppAccountRoute
   '/announcements': typeof AppAnnouncementsRoute
@@ -212,21 +217,29 @@ export interface FileRoutesByTo {
   '/audit': typeof AppAuditRoute
   '/children': typeof AppChildrenRoute
   '/courses': typeof AppCoursesRoute
+  '/dice-institutions': typeof AppDiceInstitutionsRoute
   '/finance': typeof AppFinanceRoute
+  '/fund-requests': typeof AppFundRequestsRoute
   '/instructors': typeof AppInstructorsRoute
+  '/lessons': typeof AppLessonsRoute
   '/parents': typeof AppParentsRoute
+  '/payroll': typeof AppPayrollRoute
   '/portfolio': typeof AppPortfolioRoute
   '/programs': typeof AppProgramsRoute
+  '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
+  '/reviews': typeof AppReviewsRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
   '/students': typeof AppStudentsRouteWithChildren
+  '/timetable': typeof AppTimetableRoute
   '/': typeof AppIndexRoute
   '/students/$id': typeof AppStudentsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/feedback': typeof FeedbackRoute
   '/login': typeof LoginRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/announcements': typeof AppAnnouncementsRoute
@@ -235,15 +248,22 @@ export interface FileRoutesById {
   '/_app/audit': typeof AppAuditRoute
   '/_app/children': typeof AppChildrenRoute
   '/_app/courses': typeof AppCoursesRoute
+  '/_app/dice-institutions': typeof AppDiceInstitutionsRoute
   '/_app/finance': typeof AppFinanceRoute
+  '/_app/fund-requests': typeof AppFundRequestsRoute
   '/_app/instructors': typeof AppInstructorsRoute
+  '/_app/lessons': typeof AppLessonsRoute
   '/_app/parents': typeof AppParentsRoute
+  '/_app/payroll': typeof AppPayrollRoute
   '/_app/portfolio': typeof AppPortfolioRoute
   '/_app/programs': typeof AppProgramsRoute
+  '/_app/projects': typeof AppProjectsRoute
   '/_app/reports': typeof AppReportsRoute
+  '/_app/reviews': typeof AppReviewsRoute
   '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/students': typeof AppStudentsRouteWithChildren
+  '/_app/timetable': typeof AppTimetableRoute
   '/_app/': typeof AppIndexRoute
   '/_app/students/$id': typeof AppStudentsIdRoute
 }
@@ -251,6 +271,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/feedback'
     | '/login'
     | '/account'
     | '/announcements'
@@ -259,18 +280,26 @@ export interface FileRouteTypes {
     | '/audit'
     | '/children'
     | '/courses'
+    | '/dice-institutions'
     | '/finance'
+    | '/fund-requests'
     | '/instructors'
+    | '/lessons'
     | '/parents'
+    | '/payroll'
     | '/portfolio'
     | '/programs'
+    | '/projects'
     | '/reports'
+    | '/reviews'
     | '/schedule'
     | '/settings'
     | '/students'
+    | '/timetable'
     | '/students/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/feedback'
     | '/login'
     | '/account'
     | '/announcements'
@@ -279,20 +308,28 @@ export interface FileRouteTypes {
     | '/audit'
     | '/children'
     | '/courses'
+    | '/dice-institutions'
     | '/finance'
+    | '/fund-requests'
     | '/instructors'
+    | '/lessons'
     | '/parents'
+    | '/payroll'
     | '/portfolio'
     | '/programs'
+    | '/projects'
     | '/reports'
+    | '/reviews'
     | '/schedule'
     | '/settings'
     | '/students'
+    | '/timetable'
     | '/'
     | '/students/$id'
   id:
     | '__root__'
     | '/_app'
+    | '/feedback'
     | '/login'
     | '/_app/account'
     | '/_app/announcements'
@@ -301,21 +338,29 @@ export interface FileRouteTypes {
     | '/_app/audit'
     | '/_app/children'
     | '/_app/courses'
+    | '/_app/dice-institutions'
     | '/_app/finance'
+    | '/_app/fund-requests'
     | '/_app/instructors'
+    | '/_app/lessons'
     | '/_app/parents'
+    | '/_app/payroll'
     | '/_app/portfolio'
     | '/_app/programs'
+    | '/_app/projects'
     | '/_app/reports'
+    | '/_app/reviews'
     | '/_app/schedule'
     | '/_app/settings'
     | '/_app/students'
+    | '/_app/timetable'
     | '/_app/'
     | '/_app/students/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  FeedbackRoute: typeof FeedbackRoute
   LoginRoute: typeof LoginRoute
 }
 
@@ -326,6 +371,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -340,6 +392,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/timetable': {
+      id: '/_app/timetable'
+      path: '/timetable'
+      fullPath: '/timetable'
+      preLoaderRoute: typeof AppTimetableRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/students': {
@@ -363,11 +422,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScheduleRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/reviews': {
+      id: '/_app/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof AppReviewsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/reports': {
       id: '/_app/reports'
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects': {
+      id: '/_app/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/programs': {
@@ -384,11 +457,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPortfolioRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/payroll': {
+      id: '/_app/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof AppPayrollRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/parents': {
       id: '/_app/parents'
       path: '/parents'
       fullPath: '/parents'
       preLoaderRoute: typeof AppParentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/lessons': {
+      id: '/_app/lessons'
+      path: '/lessons'
+      fullPath: '/lessons'
+      preLoaderRoute: typeof AppLessonsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/instructors': {
@@ -398,11 +485,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInstructorsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/fund-requests': {
+      id: '/_app/fund-requests'
+      path: '/fund-requests'
+      fullPath: '/fund-requests'
+      preLoaderRoute: typeof AppFundRequestsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/finance': {
       id: '/_app/finance'
       path: '/finance'
       fullPath: '/finance'
       preLoaderRoute: typeof AppFinanceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dice-institutions': {
+      id: '/_app/dice-institutions'
+      path: '/dice-institutions'
+      fullPath: '/dice-institutions'
+      preLoaderRoute: typeof AppDiceInstitutionsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/courses': {
@@ -470,17 +571,6 @@ interface AppStudentsRouteChildren {
 
 const AppStudentsRouteChildren: AppStudentsRouteChildren = {
   AppStudentsIdRoute: AppStudentsIdRoute,
-    AppProjectsRoute,
-    AppReviewsRoute,
-    AppFundRequestsRoute,
-    AppTimetableRoute,
-    AppPayrollRoute,
-    AppLessonsRoute,
-    AppDiceInstitutionsRoute,
-    AppReviewsRoute,
-    AppFundRequestsRoute,
-    AppTimetableRoute,
-    AppPayrollRoute,
 }
 
 const AppStudentsRouteWithChildren = AppStudentsRoute._addFileChildren(
@@ -495,44 +585,49 @@ interface AppRouteChildren {
   AppAuditRoute: typeof AppAuditRoute
   AppChildrenRoute: typeof AppChildrenRoute
   AppCoursesRoute: typeof AppCoursesRoute
+  AppDiceInstitutionsRoute: typeof AppDiceInstitutionsRoute
   AppFinanceRoute: typeof AppFinanceRoute
+  AppFundRequestsRoute: typeof AppFundRequestsRoute
   AppInstructorsRoute: typeof AppInstructorsRoute
+  AppLessonsRoute: typeof AppLessonsRoute
   AppParentsRoute: typeof AppParentsRoute
+  AppPayrollRoute: typeof AppPayrollRoute
   AppPortfolioRoute: typeof AppPortfolioRoute
   AppProgramsRoute: typeof AppProgramsRoute
+  AppProjectsRoute: typeof AppProjectsRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppReviewsRoute: typeof AppReviewsRoute
   AppScheduleRoute: typeof AppScheduleRoute
-  AppTimetableRoute: typeof AppTimetableRoute
-  AppPayrollRoute: typeof AppPayrollRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppStudentsRoute: typeof AppStudentsRouteWithChildren
+  AppTimetableRoute: typeof AppTimetableRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
-    AppProjectsRoute,
-    AppLessonsRoute,
-    AppDiceInstitutionsRoute,
-    AppReviewsRoute,
-    AppFundRequestsRoute,
-    AppTimetableRoute,
-    AppPayrollRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppAttendanceRoute: AppAttendanceRoute,
   AppAuditRoute: AppAuditRoute,
   AppChildrenRoute: AppChildrenRoute,
   AppCoursesRoute: AppCoursesRoute,
+  AppDiceInstitutionsRoute: AppDiceInstitutionsRoute,
   AppFinanceRoute: AppFinanceRoute,
+  AppFundRequestsRoute: AppFundRequestsRoute,
   AppInstructorsRoute: AppInstructorsRoute,
+  AppLessonsRoute: AppLessonsRoute,
   AppParentsRoute: AppParentsRoute,
+  AppPayrollRoute: AppPayrollRoute,
   AppPortfolioRoute: AppPortfolioRoute,
   AppProgramsRoute: AppProgramsRoute,
+  AppProjectsRoute: AppProjectsRoute,
   AppReportsRoute: AppReportsRoute,
+  AppReviewsRoute: AppReviewsRoute,
   AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppStudentsRoute: AppStudentsRouteWithChildren,
+  AppTimetableRoute: AppTimetableRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
@@ -540,6 +635,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  FeedbackRoute: FeedbackRoute,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport

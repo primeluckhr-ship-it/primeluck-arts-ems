@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase }
-import { useAuth } from "@/lib/auth"; from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { Plus, Pencil, MessageCircle, Search } from "lucide-react";
 import { toast } from "sonner";
