@@ -40,7 +40,7 @@ function LoginPage() {
 
   function quickLogin(e: string) {
     setEmail(e);
-    setPassword("PrimeLuck2024");
+    setPassword("PLA@2026");
   }
 
   return (
@@ -74,7 +74,7 @@ function LoginPage() {
 
           {/* Quick login buttons */}
           <div className="border-t border-border pt-3">
-            <div className="text-xs text-muted-foreground mb-2">Quick sign-in (password: PrimeLuck2024)</div>
+            <div className="text-xs text-muted-foreground mb-2">Quick sign-in (password: PLA@2026)</div>
             <div className="grid grid-cols-4 gap-1.5">
               {QUICK_LOGINS.map((q) => (
                 <button key={q.email} type="button" onClick={() => quickLogin(q.email)}
