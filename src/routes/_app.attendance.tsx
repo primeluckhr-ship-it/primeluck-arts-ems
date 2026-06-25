@@ -30,10 +30,9 @@ function AttendancePage() {
       let q = supabase.from("sessions")
         .select("*,courses(name,instructor_id,per_session_billing,session_fee,branch_id)")
         .order("start_time");
+      // Instructors see all sessions for their branch so they can take attendance for any class
       if (user?.role === "teacher" || user?.role === "instructor") {
-        // Get instructor linked to this user
-        const { data: inst } = await supabase.from("instructors").select("id").eq("email", user.email).limit(1);
-        if (inst?.[0]) q = q.eq("courses.instructor_id", inst[0].id);
+        q = q.eq("courses.branch_id", user?.branch_id ?? "");
       }
       if (user?.role === "dice_admin") {
         q = q.eq("courses.branch_id", user.branch_id);
