@@ -5,7 +5,7 @@ import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES, getStatusColor } from "@/lib/pla";
-import { Plus, Search, Pencil } from "lucide-react";
+import { Plus, Search, Pencil, UserMinus, UserCheck, GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/students")({ component: StudentsPage });
@@ -27,6 +27,7 @@ function StudentsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [showAlumni, setShowAlumni] = useState(false);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -47,21 +48,33 @@ function StudentsPage() {
     },
   });
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return (data ?? []).filter((s: any) =>
-      (statusFilter === "all" || s.status === statusFilter) &&
-      (typeFilter === "all" || s.student_type === typeFilter) &&
-      (!q || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(q))
-    );
-  }, [data, search, statusFilter, typeFilter]);
+  // displayList computed above using showAlumni toggle
 
   // Counts per type for summary bar
   const counts = useMemo(() => {
     const c: Record<string, number> = { junior: 0, teen: 0, adult: 0, institution: 0 };
-    (data ?? []).forEach((s: any) => { const t = s.student_type ?? "adult"; if (c[t] !== undefined) c[t]++; });
+    activeStudents.forEach((s: any) => { const t = s.student_type ?? "adult"; if (c[t] !== undefined) c[t]++; });
     return c;
   }, [data]);
+
+  const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
+
+  async function removeStudent(s: any, newStatus: string) {
+    const label = newStatus === "graduated" ? "Graduate" : "Remove (Left)";
+    if (!confirm(`${label} ${s.first_name} ${s.last_name}? They will be moved to Alumni.`)) return;
+    await supabase.from("students").update({ status: newStatus }).eq("id", s.id);
+    qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
+    toast.success(`${s.first_name} moved to Alumni`);
+  }
+
+  // Active students: status = active
+  // Alumni: status = left | graduated | inactive | suspended
+  const activeStudents = (data ?? []).filter((s: any) => s.status === "active");
+  const alumniStudents = (data ?? []).filter((s: any) => s.status !== "active");
+  const displayList = (showAlumni ? alumniStudents : activeStudents).filter((s: any) =>
+    (typeFilter === "all" || s.student_type === typeFilter) &&
+    (!search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <div className="space-y-4">
@@ -78,7 +91,7 @@ function StudentsPage() {
 
       <PageCard
         title="Students"
-        subtitle={`${filtered.length} of ${data?.length ?? 0}`}
+        subtitle={showAlumni ? `${alumniStudents.length} alumni` : `${activeStudents.length} active`}
         action={
           <button onClick={() => { setEditing(null); setOpen(true); }}
             className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
@@ -101,13 +114,16 @@ function StudentsPage() {
             <option value="adult">Adults</option>
             <option value="institution">Institutions</option>
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-background border border-input rounded-md px-3 py-2 text-sm">
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="suspended">Suspended</option>
-          </select>
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            <button onClick={() => setShowAlumni(false)}
+              className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${!showAlumni ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+              <UserCheck className="size-3.5"/>Active ({activeStudents.length})
+            </button>
+            <button onClick={() => setShowAlumni(true)}
+              className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${showAlumni ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+              <GraduationCap className="size-3.5"/>Alumni ({alumniStudents.length})
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -122,7 +138,7 @@ function StudentsPage() {
             </tr></thead>
             <tbody>
               {isLoading && <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
-              {filtered.map((s: any) => (
+              {displayList.map((s: any) => (
                 <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
                   <td className="py-2.5 pr-3 font-mono text-xs">
                     <Link to="/students/$id" params={{ id: s.id }} className="text-accent hover:underline">{s.admission_number}</Link>
@@ -132,14 +148,31 @@ function StudentsPage() {
                     <Badge className={TYPE_COLORS[s.student_type ?? "adult"]}>{TYPE_LABELS[s.student_type ?? "adult"]}</Badge>
                   </td>
                   <td className="py-2.5 pr-3 text-muted-foreground">{s.skill_level || "—"}</td>
-                  <td className="py-2.5 pr-3"><Badge className={getStatusColor(s.status)}>{s.status}</Badge></td>
+                  <td className="py-2.5 pr-3"><Badge className={getStatusColor(s.status)}>{s.status === "left" ? "Left" : s.status === "graduated" ? "Graduated 🎓" : s.status}</Badge></td>
                   <td className="py-2.5 pr-3 text-right font-semibold">{formatKES(s.outstanding)}</td>
                   <td className="py-2.5">
-                    <button onClick={() => { setEditing(s); setOpen(true); }} className="p-1.5 rounded hover:bg-muted"><Pencil className="size-4" /></button>
+                    <div className="flex gap-0.5">
+                      <button onClick={() => { setEditing(s); setOpen(true); }} className="p-1.5 rounded hover:bg-muted" title="Edit"><Pencil className="size-3.5" /></button>
+                      {isAdmin && !showAlumni && (
+                        <>
+                          <button onClick={() => removeStudent(s, "graduated")} className="p-1.5 rounded hover:bg-success/20 text-success" title="Graduated">
+                            <GraduationCap className="size-3.5"/>
+                          </button>
+                          <button onClick={() => removeStudent(s, "left")} className="p-1.5 rounded hover:bg-danger/20 text-danger" title="Left / Withdrawn">
+                            <UserMinus className="size-3.5"/>
+                          </button>
+                        </>
+                      )}
+                      {isAdmin && showAlumni && (
+                        <button onClick={() => removeStudent(s, "active")} className="p-1.5 rounded hover:bg-success/20 text-success text-xs px-2" title="Restore to active">
+                          Restore
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
-              {!isLoading && !filtered.length && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No students found</td></tr>}
+              {!isLoading && !displayList.length && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">{showAlumni ? "No alumni yet" : "No active students"}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -279,6 +312,8 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="suspended">Suspended</option>
+              <option value="graduated">Graduated</option>
+              <option value="left">Left / Withdrawn</option>
             </select>
           </Field>
           <Field label="Notes" className="sm:col-span-2">
