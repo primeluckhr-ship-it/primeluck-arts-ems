@@ -48,7 +48,13 @@ function StudentsPage() {
     },
   });
 
-  // displayList computed above using showAlumni toggle
+  // Active / alumni split — must be declared before counts useMemo uses them
+  const activeStudents = (data ?? []).filter((s: any) => s.status === "active");
+  const alumniStudents = (data ?? []).filter((s: any) => s.status !== "active");
+  const displayList = (showAlumni ? alumniStudents : activeStudents).filter((s: any) =>
+    (typeFilter === "all" || s.student_type === typeFilter) &&
+    (!search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase()))
+  );
 
   // Counts per type for summary bar
   const counts = useMemo(() => {
@@ -66,15 +72,6 @@ function StudentsPage() {
     qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
     toast.success(`${s.first_name} moved to Alumni`);
   }
-
-  // Active students: status = active
-  // Alumni: status = left | graduated | inactive | suspended
-  const activeStudents = (data ?? []).filter((s: any) => s.status === "active");
-  const alumniStudents = (data ?? []).filter((s: any) => s.status !== "active");
-  const displayList = (showAlumni ? alumniStudents : activeStudents).filter((s: any) =>
-    (typeFilter === "all" || s.student_type === typeFilter) &&
-    (!search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase()))
-  );
 
   return (
     <div className="space-y-4">
