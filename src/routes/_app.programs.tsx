@@ -60,8 +60,8 @@ function ProgramsPage() {
                   <td className="py-2.5 pr-3 text-right">{p.monthly_fee ? formatKES(p.monthly_fee) : "—"}</td>
                   <td className="py-2.5 pr-3 text-right">{p.term_fee ? formatKES(p.term_fee) : "—"}</td>
                   <td className="py-2.5 pr-3">
-                    <Badge className={p.is_active ? "bg-success/15 text-success border-success/30" : "bg-muted text-muted-foreground border-border"}>
-                      {p.is_active ? "Active" : "Inactive"}
+                    <Badge className={p.status === "active" ? "bg-success/15 text-success border-success/30" : "bg-muted text-muted-foreground border-border"}>
+                      {p.status ?? "active"}
                     </Badge>
                   </td>
                   <td className="py-2.5">
@@ -173,10 +173,10 @@ function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
           </Field>
           <Field label="Status" className="sm:col-span-2">
             <div className="flex gap-2">
-              {[true, false].map((v) => (
-                <button key={String(v)} type="button" onClick={() => setForm({ ...form, is_active: v })}
-                  className={`flex-1 py-2 rounded-md text-sm font-medium border transition-all ${form.is_active === v ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground"}`}>
-                  {v ? "Active" : "Inactive"}
+              {(["active","inactive"] as const).map((v) => (
+                <button key={String(v)} type="button" onClick={() => setForm({ ...form, status: String(v) })}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium border transition-all ${form.status === String(v) ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground"}`}>
+                  {v === "active" ? "Active" : "Inactive"}
                 </button>
               ))}
             </div>

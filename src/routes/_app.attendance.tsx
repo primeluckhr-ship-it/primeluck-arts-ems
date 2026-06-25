@@ -30,7 +30,7 @@ function AttendancePage() {
       let q = supabase.from("sessions")
         .select("*,courses(name,instructor_id,per_session_billing,session_fee,branch_id)")
         .order("start_time");
-      if (user?.role === "teacher") {
+      if (user?.role === "teacher" || user?.role === "instructor") {
         // Get instructor linked to this user
         const { data: inst } = await supabase.from("instructors").select("id").eq("email", user.email).limit(1);
         if (inst?.[0]) q = q.eq("courses.instructor_id", inst[0].id);
@@ -43,7 +43,7 @@ function AttendancePage() {
         const ids = (enr??[]).map((e:any) => e.course_id);
         if (ids.length) q = q.in("course_id", ids);
       }
-      return (await q.order("date", {ascending:false})).data ?? [];
+      return (await q.order("session_date", {ascending:false})).data ?? [];
     },
   });
 
@@ -51,8 +51,8 @@ function AttendancePage() {
     return <AttendanceSheet session={selectedSession} onBack={() => setSelectedSession(null)} />;
   }
 
-  const todaySessions = (sessions??[]).filter((s:any) => s.date === today);
-  const otherSessions = (sessions??[]).filter((s:any) => s.date !== today);
+  const todaySessions = (sessions??[]).filter((s:any) => s.session_date === today);
+  const otherSessions = (sessions??[]).filter((s:any) => s.session_date !== today);
 
   return (
     <div className="space-y-4">
@@ -82,7 +82,7 @@ function SessionRow({ session, onClick }:{ session:any; onClick:()=>void }) {
         <CalendarCheck className="size-5 text-accent shrink-0"/>
         <div>
           <div className="font-medium text-sm">{session.courses?.name ?? "Session"}</div>
-          <div className="text-xs text-muted-foreground">{session.date} · {session.start_time?.slice(0,5)} – {session.end_time?.slice(0,5)}</div>
+          <div className="text-xs text-muted-foreground">{session.session_date} · {session.start_time?.slice(0,5)} – {session.end_time?.slice(0,5)}</div>
         </div>
       </div>
       <Badge className={cfg.cls}>{session.status}</Badge>
@@ -123,7 +123,6 @@ function AttendanceSheet({ session, onBack }:{ session:any; onBack:()=>void }) {
   async function saveAll() {
     setSaving(true);
     try {
-      const { user: authUser } = useAuth();
       const rows = (enrolled??[]).map((s:any) => ({
         session_id: session.id, student_id: s.id, course_id: session.course_id,
         status: marks[s.id] ?? "absent", marked_by: null,

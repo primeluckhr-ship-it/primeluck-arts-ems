@@ -68,7 +68,7 @@ function FundRequestsPage() {
       <PageCard title="Fund Requests"
         subtitle={isAdmin ? "Approve or reject instructor requests" : "Your funding requests"}
         action={
-          user?.role === "teacher" && (
+          isInstructor && (
             <button onClick={() => setOpen(true)}
               className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
               <Plus className="size-4"/>New Request

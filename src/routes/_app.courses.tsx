@@ -31,7 +31,7 @@ function CoursesPage() {
       let q = supabase.from("courses")
         .select("*,programs(name,monthly_fee,term_fee,billing_cycle),instructors(first_name,last_name),course_enrollments(id)")
         .order("name");
-      if (user?.role === "teacher") {
+      if (user?.role === "teacher" || user?.role === "instructor") {
         const { data: inst } = await supabase.from("instructors").select("id").eq("email", user.email).limit(1);
         if (inst?.[0]) q = q.eq("instructor_id", inst[0].id);
       }

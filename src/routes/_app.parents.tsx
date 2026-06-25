@@ -116,7 +116,6 @@ function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>voi
     whatsapp:     initial?.whatsapp??"",
     relationship: initial?.relationship??"parent",
     address:      initial?.address??"",
-    notes:        initial?.notes??"",
   });
   const [saving, setSaving] = useState(false);
 
@@ -184,10 +183,6 @@ function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>voi
                 </label>
               ))}
             </div>
-          </Field>
-          <Field label="Notes" className="sm:col-span-2">
-            <textarea value={form.notes} onChange={(e)=>setForm({...form,notes:e.target.value})}
-              rows={2} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
           </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">

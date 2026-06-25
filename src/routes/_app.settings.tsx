@@ -97,7 +97,7 @@ function UsersTab() {
 function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void; onSaved:()=>void }) {
   const [form, setForm] = useState({
     first_name: initial?.first_name??"", last_name: initial?.last_name??"",
-    email: initial?.email??"", role: initial?.role??"teacher",
+    email: initial?.email??"", role: initial?.role??"instructor",
     branch_id: initial?.branch_id??"", is_active: initial?.is_active??true,
     linked_entity_id: initial?.linked_entity_id??"",
   });

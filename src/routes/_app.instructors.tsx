@@ -145,7 +145,6 @@ function InstructorForm({ initial, onClose, onSaved }: { initial:any; onClose:()
     last_name:  initial?.last_name??"",
     email:      initial?.email??"",
     phone:      initial?.phone??"",
-    whatsapp:   initial?.whatsapp??"",
     bio:        initial?.bio??"",
     status:     initial?.status??"active",
     specialization: initial?.specialization??[] as string[],
@@ -187,7 +186,6 @@ function InstructorForm({ initial, onClose, onSaved }: { initial:any; onClose:()
           <Field label="Last name"><Input value={form.last_name} onChange={(v)=>setForm({...form,last_name:v})}/></Field>
           <Field label="Email" className="sm:col-span-2"><Input value={form.email} onChange={(v)=>setForm({...form,email:v})}/></Field>
           <Field label="Phone"><Input value={form.phone} onChange={(v)=>setForm({...form,phone:v})} placeholder="+2547..."/></Field>
-          <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(v)=>setForm({...form,whatsapp:v})} placeholder="+2547..."/></Field>
           <Field label="Status" className="sm:col-span-2">
             <div className="flex gap-2">
               {["active","inactive"].map((s)=>(

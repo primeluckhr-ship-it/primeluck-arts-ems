@@ -87,14 +87,13 @@ function AnnForm({ initial, onClose, onSaved }: { initial: any; onClose: () => v
     title: initial?.title ?? "",
     content: initial?.content ?? "",
     priority: initial?.priority ?? "normal",
-    target_roles: initial?.target_roles ?? ["all"],
     is_published: initial?.is_published ?? true,
   });
   const [saving, setSaving] = useState(false);
   async function save() {
     setSaving(true);
     try {
-      const payload: any = { ...form, posted_by: user?.id };
+      const payload: any = { ...form, created_by: user?.id, branch_id: user?.branch_id ?? "" };
       if (initial) await supabase.from("announcements").update(payload).eq("id", initial.id).throwOnError();
       else await supabase.from("announcements").insert(payload).throwOnError();
       toast.success("Posted"); onSaved();
