@@ -64,7 +64,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (!user) return null;
   const items = NAV.filter((i) => i.roles.includes(user.role));
-  const currentTitle = items.find((i) => i.to === pathname)?.label ?? "PrimeLuck Arts";
+  const brandName = user.branch_id === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts";
+  const currentTitle = items.find((i) => i.to === pathname)?.label ?? brandName;
 
   const SidebarBody = (
     <nav className="flex-1 overflow-y-auto py-3 space-y-1 px-2">
@@ -103,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <aside className="relative w-72 bg-sidebar border-r border-sidebar-border flex flex-col">
             <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border">
-              <Logo size={36} branch={user.branch_id ?? ""} /><div className="leading-tight"><div className="text-sm font-bold">PRIME LUCK</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">Arts Academy</div></div>
+              <Logo size={36} branch={user.branch_id ?? ""} /><div className="leading-tight"><div className="text-sm font-bold tracking-wide">{user.branch_id === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{user.branch_id === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>
             </div>
             {SidebarBody}
           </aside>
