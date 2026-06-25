@@ -358,6 +358,35 @@ Make it practical, engaging and age-appropriate.`;
           <TA label="Activities" field="activities"/>
           <TA label="Homework / Follow-up" field="homework"/>
         </div>
+        {/* Photo upload */}
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium text-muted-foreground block mb-2">Work photos (optional, max 6)</label>
+          <div className="grid grid-cols-3 gap-2">
+            {photos.map((p, i) => (
+              <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-border">
+                <img src={p.preview} alt="" className="w-full h-full object-cover"/>
+                <button type="button" onClick={() => removePhoto(i)}
+                  className="absolute top-1 right-1 size-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black">✕</button>
+              </div>
+            ))}
+            {photos.length < 6 && (
+              <label className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-accent cursor-pointer flex flex-col items-center justify-center text-muted-foreground hover:text-accent transition-colors">
+                <span className="text-2xl">+</span>
+                <span className="text-xs mt-1">Add photo</span>
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)}/>
+              </label>
+            )}
+          </div>
+          {uploadProgress > 0 && uploadProgress < 100 && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-1.5 bg-accent rounded-full transition-all" style={{ width: `${uploadProgress}%` }}/>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Uploading photos… {uploadProgress}%</p>
+            </div>
+          )}
+        </div>
+        </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
           <button onClick={save} disabled={saving}
@@ -511,7 +540,36 @@ ${report.instructor_comments ? `<div class="section"><h3>Instructor's Comments</
             <Share2 className="size-4"/>Download / Print PDF
           </button>
         </div>
+        <PhotoGallery reportId={report.id}/>
         <button onClick={onClose} className="w-full mt-3 text-sm text-muted-foreground hover:text-foreground text-center">Close</button>
+      </div>
+    </div>
+  );
+}
+
+function PhotoGallery({ reportId }: { reportId: string }) {
+  const { data: photos } = useQuery({
+    queryKey: ["report-photos", reportId],
+    queryFn: async () => {
+      const { data } = await supabase.from("report_photos").select("*").eq("report_id", reportId);
+      return (data ?? []).map((p: any) => ({
+        ...p,
+        url: supabase.storage.from("report-photos").getPublicUrl(p.storage_path).data.publicUrl,
+      }));
+    },
+    enabled: !!reportId,
+  });
+  if (!photos?.length) return null;
+  return (
+    <div className="mt-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2">Student Work Photos ({photos.length})</div>
+      <div className="grid grid-cols-3 gap-2">
+        {photos.map((p: any) => (
+          <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+            className="aspect-square rounded-lg overflow-hidden border border-border hover:border-accent transition-colors">
+            <img src={p.url} alt={p.caption||"Work photo"} className="w-full h-full object-cover hover:scale-105 transition-transform"/>
+          </a>
+        ))}
       </div>
     </div>
   );
@@ -533,6 +591,19 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     instructor_comments: initial?.instructor_comments ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  function addPhotos(files: FileList | null) {
+    if (!files) return;
+    const newPhotos = Array.from(files).slice(0, 6 - photos.length).map(file => ({
+      file, preview: URL.createObjectURL(file),
+    }));
+    setPhotos(p => [...p, ...newPhotos]);
+  }
+  function removePhoto(idx: number) {
+    setPhotos(p => p.filter((_, i) => i !== idx));
+  }
 
   const { data: students } = useQuery({ queryKey:["students-active"], queryFn: async () => (await supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name")).data ?? [] });
   const { data: courses }   = useQuery({ queryKey:["courses-list"],   queryFn: async () => (await supabase.from("courses").select("id,name").order("name")).data ?? [] });
@@ -557,15 +628,29 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
       const payload = { ...form, branch_id: user?.branch_id ?? "", created_by: user?.id,
         attendance_sessions: Number(form.attendance_sessions), attendance_present: Number(form.attendance_present),
         course_id: form.course_id || null, instructor_id: form.instructor_id || null };
+      let reportId = initial?.id;
       if (initial) {
         const { error } = await supabase.from("student_progress_reports").update(payload).eq("id", initial.id);
         if (error) throw error;
-        toast.success("Report updated");
       } else {
-        const { error } = await supabase.from("student_progress_reports").insert(payload);
+        const { data: newReport, error } = await supabase.from("student_progress_reports").insert(payload).select("id").single();
         if (error) throw error;
-        toast.success("Report created");
+        reportId = newReport.id;
       }
+      // Upload photos if any
+      if (photos.length && reportId) {
+        setUploadProgress(0);
+        for (let i = 0; i < photos.length; i++) {
+          const { file } = photos[i];
+          const path = `${reportId}/${Date.now()}-${file.name.replace(/[^a-z0-9.]/gi,"_")}`;
+          const { error: storErr } = await supabase.storage.from("report-photos").upload(path, file, { upsert: true });
+          if (!storErr) {
+            await supabase.from("report_photos").insert({ report_id: reportId, storage_path: path, caption: "" });
+          }
+          setUploadProgress(Math.round(((i+1)/photos.length)*100));
+        }
+      }
+      toast.success(initial ? "Report updated" : "Report created");
       onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
@@ -620,6 +705,35 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
           <TA label="Skills Demonstrated" field="skills_demonstrated"/>
           <TA label="Areas for Improvement" field="areas_for_improvement"/>
           <TA label="Instructor's Comments" field="instructor_comments" rows={4}/>
+        </div>
+        {/* Photo upload */}
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium text-muted-foreground block mb-2">Work photos (optional, max 6)</label>
+          <div className="grid grid-cols-3 gap-2">
+            {photos.map((p, i) => (
+              <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-border">
+                <img src={p.preview} alt="" className="w-full h-full object-cover"/>
+                <button type="button" onClick={() => removePhoto(i)}
+                  className="absolute top-1 right-1 size-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black">✕</button>
+              </div>
+            ))}
+            {photos.length < 6 && (
+              <label className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-accent cursor-pointer flex flex-col items-center justify-center text-muted-foreground hover:text-accent transition-colors">
+                <span className="text-2xl">+</span>
+                <span className="text-xs mt-1">Add photo</span>
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)}/>
+              </label>
+            )}
+          </div>
+          {uploadProgress > 0 && uploadProgress < 100 && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-1.5 bg-accent rounded-full transition-all" style={{ width: `${uploadProgress}%` }}/>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Uploading photos… {uploadProgress}%</p>
+            </div>
+          )}
+        </div>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>

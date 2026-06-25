@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_app/reports")({
 const COLORS = ["#d4a017", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
 
 function ReportsPage() {
-  const [tab, setTab] = useState<"finance" | "enrollment" | "attendance">("finance");
+  const [tab, setTab] = useState<"finance" | "enrollment" | "attendance" | "categories">("finance");
   const [from, setFrom] = useState(formatISO(startOfMonth(new Date()), { representation: "date" }));
   const [to, setTo] = useState(formatISO(endOfMonth(new Date()), { representation: "date" }));
 
@@ -26,7 +26,7 @@ function ReportsPage() {
           <label className="text-xs"><span className="block mb-1 text-muted-foreground">From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm" /></label>
           <label className="text-xs"><span className="block mb-1 text-muted-foreground">To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm" /></label>
           <div className="flex gap-1 ml-auto">
-            {(["finance", "enrollment", "attendance"] as const).map((t) => (
+            {(["finance", "enrollment", "attendance", "categories"] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-sm capitalize rounded-md ${tab === t ? "bg-accent text-accent-foreground" : "bg-muted"}`}>{t}</button>
             ))}
           </div>

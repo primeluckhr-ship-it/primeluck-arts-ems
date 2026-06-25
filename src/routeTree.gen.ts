@@ -32,6 +32,10 @@ import { Route as AppStudentsIdRouteImport } from './routes/_app.students.$id'
 import { Route as AppProjectsRouteImport } from './routes/_app.projects'
 import { Route as AppLessonsRouteImport } from './routes/_app.lessons'
 import { Route as AppDiceInstitutionsRouteImport } from './routes/_app.dice-institutions'
+import { Route as FeedbackRouteImport } from './routes/feedback'
+import { Route as AppAdminFeedbackRouteImport } from './routes/_app.feedback'
+import { Route as AppFundRequestsRouteImport } from './routes/_app.fund-requests'
+
 
 
 const AppProjectsRoute = AppProjectsRouteImport.update({
@@ -47,6 +51,21 @@ const AppLessonsRoute = AppLessonsRouteImport.update({
 const AppDiceInstitutionsRoute = AppDiceInstitutionsRouteImport.update({
   id: '/dice-institutions',
   path: '/dice-institutions',
+  getParentRoute: () => AppRoute,
+} as any)
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRoute,
+} as any)
+const AppAdminFeedbackRoute = AppAdminFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFundRequestsRoute = AppFundRequestsRouteImport.update({
+  id: '/fund-requests',
+  path: '/fund-requests',
   getParentRoute: () => AppRoute,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -438,8 +457,12 @@ interface AppStudentsRouteChildren {
 const AppStudentsRouteChildren: AppStudentsRouteChildren = {
   AppStudentsIdRoute: AppStudentsIdRoute,
     AppProjectsRoute,
+    AppAdminFeedbackRoute,
+    AppFundRequestsRoute,
     AppLessonsRoute,
     AppDiceInstitutionsRoute,
+    AppAdminFeedbackRoute,
+    AppFundRequestsRoute,
 }
 
 const AppStudentsRouteWithChildren = AppStudentsRoute._addFileChildren(
@@ -471,6 +494,8 @@ const AppRouteChildren: AppRouteChildren = {
     AppProjectsRoute,
     AppLessonsRoute,
     AppDiceInstitutionsRoute,
+    AppAdminFeedbackRoute,
+    AppFundRequestsRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppAttendanceRoute: AppAttendanceRoute,
