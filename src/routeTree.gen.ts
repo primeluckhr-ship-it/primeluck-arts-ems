@@ -34,6 +34,8 @@ import { Route as AppLessonsRouteImport } from './routes/_app.lessons'
 import { Route as AppDiceInstitutionsRouteImport } from './routes/_app.dice-institutions'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AppReviewsRouteImport } from './routes/_app.reviews'
+import { Route as AppTimetableRouteImport } from './routes/_app.timetable'
+import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
 import { Route as AppFundRequestsRouteImport } from './routes/_app.fund-requests'
 
 
@@ -63,6 +65,18 @@ const AppReviewsRoute = AppReviewsRouteImport.update({
   path: '/reviews',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTimetableRoute = AppTimetableRouteImport.update({
+  id: '/timetable',
+  path: '/timetable',
+  getParentRoute: () => AppRoute,
+} as any)
+
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
+  getParentRoute: () => AppRoute,
+} as any)
+
 const AppFundRequestsRoute = AppFundRequestsRouteImport.update({
   id: '/fund-requests',
   path: '/fund-requests',
@@ -459,10 +473,14 @@ const AppStudentsRouteChildren: AppStudentsRouteChildren = {
     AppProjectsRoute,
     AppReviewsRoute,
     AppFundRequestsRoute,
+    AppTimetableRoute,
+    AppPayrollRoute,
     AppLessonsRoute,
     AppDiceInstitutionsRoute,
     AppReviewsRoute,
     AppFundRequestsRoute,
+    AppTimetableRoute,
+    AppPayrollRoute,
 }
 
 const AppStudentsRouteWithChildren = AppStudentsRoute._addFileChildren(
@@ -484,6 +502,8 @@ interface AppRouteChildren {
   AppProgramsRoute: typeof AppProgramsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppScheduleRoute: typeof AppScheduleRoute
+  AppTimetableRoute: typeof AppTimetableRoute
+  AppPayrollRoute: typeof AppPayrollRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppStudentsRoute: typeof AppStudentsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
@@ -496,6 +516,8 @@ const AppRouteChildren: AppRouteChildren = {
     AppDiceInstitutionsRoute,
     AppReviewsRoute,
     AppFundRequestsRoute,
+    AppTimetableRoute,
+    AppPayrollRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppAttendanceRoute: AppAttendanceRoute,

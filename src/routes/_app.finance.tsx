@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge, StatCard } from "@/components/app-shell";
 import { formatKES, getStatusColor, generateReceiptNumber, generateInvoiceNumber } from "@/lib/pla";
@@ -17,7 +17,7 @@ function FinancePage() {
   const isDice = user?.role === "dice_admin";
   const [tab, setTab] = useState<"invoices"|"payments"|"arrears"|"expenditure"|"income">("invoices");
 
-  const tabs = isDice
+  const tabs = (isDice || user?.role === "super_admin" || user?.role === "finance_admin")
     ? ["invoices","payments","arrears","expenditure","income"] as const
     : ["invoices","payments","arrears","expenditure"] as const;
 

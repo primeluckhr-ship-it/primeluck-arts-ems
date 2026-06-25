@@ -15,6 +15,7 @@ const ROLE_COLORS: Record<string, string> = {
   super_admin:  "bg-red-500/15 text-red-400 border-red-500/30",
   finance_admin:"bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
   teacher:      "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  instructor:   "bg-blue-500/15 text-blue-400 border-blue-500/30",
   parent:       "bg-green-500/15 text-green-400 border-green-500/30",
   student:      "bg-purple-500/15 text-purple-400 border-purple-500/30",
   dice_admin:   "bg-orange-500/15 text-orange-400 border-orange-500/30",
@@ -54,6 +55,13 @@ function UsersTab() {
     queryKey:["users-list"],
     queryFn: async () => (await supabase.from("users").select("*").order("role")).data ?? [],
   });
+  async function handleDeleteUser(u: any) {
+    if (!confirm(`Delete user ${u.email}? This cannot be undone.`)) return;
+    await supabase.from("users").delete().eq("id", u.id);
+    qc.invalidateQueries({ queryKey: ["users-list"] });
+    toast.success("User deleted");
+  }
+
   return (
     <PageCard title="System Users" subtitle="Manage access and roles"
       action={<button onClick={() => { setEditing(null); setOpen(true); }}
@@ -97,7 +105,7 @@ function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void;
   const [saving, setSaving] = useState(false);
 
   // Load linkable entities based on role
-  const needsLink = ["parent","student"].includes(form.role);
+  const needsLink = ["parent","student","teacher","instructor"].includes(form.role);
   const { data: linkOptions } = useQuery({
     queryKey: ["link-options", form.role],
     enabled: needsLink,
@@ -153,7 +161,8 @@ function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void;
               className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option value="super_admin">Super Admin (PLA)</option>
               <option value="finance_admin">Finance Admin (PLA)</option>
-              <option value="teacher">Teacher</option>
+              <option value="instructor">Instructor</option>
+              <option value="teacher">Teacher (legacy)</option>
               <option value="parent">Parent</option>
               <option value="student">Student</option>
               <option value="dice_admin">Dice Arts Admin</option>
@@ -167,10 +176,14 @@ function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void;
             </select>
           </Field>
           {needsLink && (
-            <Field label={form.role==="parent"?"Link to Parent record":"Link to Student record"} className="sm:col-span-2">
+            <Field label={
+                form.role==="parent" ? "Link to Parent record" :
+                form.role==="teacher"||form.role==="instructor" ? "Link to Instructor record" :
+                "Link to Student record"
+              } className="sm:col-span-2">
               <select value={form.linked_entity_id} onChange={(e) => setForm({...form,linked_entity_id:e.target.value})}
                 className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-                <option value="">— Select {form.role} —</option>
+                <option value="">— Select record —</option>
                 {(linkOptions??[]).map((o:any) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
             </Field>

@@ -34,12 +34,18 @@ function FundRequestsPage() {
     queryKey: ["fund-requests", user?.id, user?.role],
     queryFn: async () => {
       let q = supabase.from("fund_requests")
-        .select("*,instructors(first_name,last_name,email),users(first_name,last_name)")
+        .select("*,instructors(first_name,last_name,email,branch_id),users(first_name,last_name)")
         .order("created_at", { ascending: false });
+      // super_admin sees all branches; dice_admin and branch admins see their own
+      if (user?.role !== "super_admin") {
+        q = q.eq("branch_id", user?.branch_id ?? "");
+      }
       if (!isAdmin) {
         // Instructors see only their own requests
-        const { data: inst } = await supabase.from("instructors").select("id").eq("email", user?.email).limit(1);
-        if (inst?.[0]) q = q.eq("instructor_id", inst[0].id);
+        const lookupId = user?.linked_entity_id || 
+          (await supabase.from("instructors").select("id").eq("email", user?.email ?? "").limit(1))
+            .data?.[0]?.id;
+        if (lookupId) q = q.eq("instructor_id", lookupId);
       } else if (user?.role === "dice_admin") {
         q = q.eq("branch_id", user.branch_id);
       }
@@ -215,11 +221,16 @@ function RequestForm({ onClose, onSaved }: { onClose:()=>void; onSaved:()=>void 
     if (!form.description || !form.amount) { toast.error("Fill all required fields"); return; }
     setSaving(true);
     try {
-      const { data: inst } = await supabase.from("instructors").select("id").eq("email", user?.email).limit(1);
-      if (!inst?.[0]) { toast.error("Instructor profile not found — contact admin"); return; }
+      // Lookup instructor: by linked_entity_id first, then email
+      let instructorId = user?.linked_entity_id;
+      if (!instructorId) {
+        const { data: inst } = await supabase.from("instructors").select("id").eq("email", user?.email ?? "").limit(1);
+        instructorId = inst?.[0]?.id ?? null;
+      }
+      if (!instructorId) { toast.error("Your instructor profile is not linked — ask admin to set your linked entity in Settings"); return; }
       const { error } = await supabase.from("fund_requests").insert({
         branch_id: user?.branch_id ?? "",
-        instructor_id: inst[0].id,
+        instructor_id: instructorId,
         category: form.category,
         description: form.description,
         amount: Number(form.amount),

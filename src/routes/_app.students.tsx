@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES, getStatusColor } from "@/lib/pla";
 import { Plus, Search, Pencil } from "lucide-react";
@@ -157,11 +157,13 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
     last_name: initial?.last_name ?? "",
     date_of_birth: initial?.date_of_birth ?? "",
     gender: initial?.gender ?? "",
-    school: initial?.school ?? "",
+    school_name: initial?.school_name ?? "",
     grade: initial?.grade ?? "",
     skill_level: initial?.skill_level ?? "Beginner",
     enrollment_date: initial?.enrollment_date ?? new Date().toISOString().slice(0, 10),
-    emergency_contact: initial?.emergency_contact ?? "",
+    emergency_contact_name: initial?.emergency_contact_name ?? "",
+    emergency_contact_phone: initial?.emergency_contact_phone ?? "",
+    parent_phone: initial?.parent_phone ?? "",
     notes: initial?.notes ?? "",
     status: initial?.status ?? "active",
     student_type: initial?.student_type ?? "adult",
@@ -185,15 +187,20 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
   async function save() {
     setSaving(true);
     try {
-      const payload = { ...form, institution_id: institutionId || null };
+      const payload = { 
+        ...form, 
+        institution_id: institutionId || null,
+        branch_id: user?.branch_id ?? "",
+      };
       if (initial) {
         const { error } = await supabase.from("students").update(payload).eq("id", initial.id);
         if (error) throw error;
         toast.success("Student updated");
       } else {
-        const { error } = await supabase.from("students").insert(payload);
+        const { error, data: inserted } = await supabase.from("students").insert(payload).select().single();
         if (error) throw error;
         toast.success("Student added");
+        await logAudit({ user_id: user?.id, branch_id: payload.branch_id, action: "CREATE", entity_type: "student", entity_id: inserted?.id, description: `Added student: ${payload.first_name} ${payload.last_name}` });
       }
       onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
@@ -246,7 +253,7 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
               <option value="">—</option><option>male</option><option>female</option><option>other</option>
             </select>
           </Field>
-          <Field label="School"><Input value={form.school} onChange={(v) => setForm({ ...form, school: v })} /></Field>
+          <Field label="School"><Input value={form.school_name} onChange={(v) => setForm({ ...form, school_name: v })} /></Field>
           <Field label="Grade"><Input value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} /></Field>
           <Field label="Skill level">
             <select value={form.skill_level} onChange={(e) => setForm({ ...form, skill_level: e.target.value })}
@@ -255,7 +262,13 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
             </select>
           </Field>
           <Field label="Enrollment date"><Input type="date" value={form.enrollment_date} onChange={(v) => setForm({ ...form, enrollment_date: v })} /></Field>
-          <Field label="Emergency contact" className="sm:col-span-2"><Input value={form.emergency_contact} onChange={(v) => setForm({ ...form, emergency_contact: v })} /></Field>
+          <Field label="Emergency contact name"><Input value={form.emergency_contact_name} onChange={(v) => setForm({ ...form, emergency_contact_name: v })} placeholder="Full name" /></Field>
+          <Field label="Emergency contact phone"><Input value={form.emergency_contact_phone} onChange={(v) => setForm({ ...form, emergency_contact_phone: v })} placeholder="+254…" /></Field>
+          {(form.student_type === "junior" || form.student_type === "teen") && (
+            <Field label="Parent / guardian WhatsApp" className="sm:col-span-2">
+              <Input value={form.parent_phone} onChange={(v) => setForm({ ...form, parent_phone: v })} placeholder="+254… (for automated reminders)" />
+            </Field>
+          )}
           <Field label="Notes" className="sm:col-span-2">
             <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={3} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />

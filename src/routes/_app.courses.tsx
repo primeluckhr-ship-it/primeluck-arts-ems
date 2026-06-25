@@ -229,6 +229,8 @@ function CourseForm({ initial, onClose, onSaved }: { initial:any; onClose:()=>vo
         program_id: form.program_id||null,
         instructor_id: form.instructor_id||null,
         branch_id: user?.branch_id??"",
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
       };
       if (initial) {
         const { error } = await supabase.from("courses").update(payload).eq("id", initial.id);

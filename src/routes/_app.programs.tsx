@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES } from "@/lib/pla";
 import { Plus, Pencil } from "lucide-react";
@@ -88,15 +89,17 @@ function ProgramsPage() {
 function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: initial?.name ?? "",
-    category: initial?.category ?? "",
+    category: initial?.category ?? "general",
     description: initial?.description ?? "",
     billing_cycle: initial?.billing_cycle ?? "monthly",
     monthly_fee: initial?.monthly_fee ?? "",
     term_fee: initial?.term_fee ?? "",
     max_students: initial?.max_students ?? "",
-    is_active: initial?.is_active ?? true,
+    status: initial?.status ?? "active",
+    category: initial?.category ?? "general",
   });
   const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
 
   async function save() {
     setSaving(true);
@@ -106,6 +109,7 @@ function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
         monthly_fee: form.billing_cycle === "monthly" ? (Number(form.monthly_fee) || null) : null,
         term_fee: form.billing_cycle === "termly" ? (Number(form.term_fee) || null) : null,
         max_students: Number(form.max_students) || null,
+        branch_id: user?.branch_id ?? "",
       };
       if (initial) {
         const { error } = await supabase.from("programs").update(payload).eq("id", initial.id);
@@ -126,7 +130,18 @@ function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
         <h2 className="text-lg font-semibold mb-4">{initial ? "Edit Program" : "New Program"}</h2>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Program name" className="sm:col-span-2"><Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} /></Field>
-          <Field label="Category"><Input value={form.category} onChange={(v) => setForm({ ...form, category: v })} placeholder="e.g. Visual Arts" /></Field>
+          <Field label="Category">
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="general">General</option>
+              <option value="painting">Painting</option>
+              <option value="drawing">Drawing</option>
+              <option value="sculpture">Sculpture</option>
+              <option value="digital_art">Digital Art</option>
+              <option value="craft">Craft</option>
+              <option value="photography">Photography</option>
+              <option value="mixed_media">Mixed Media</option>
+            </select>
+          </Field>
           <Field label="Max students"><Input type="number" value={form.max_students} onChange={(v) => setForm({ ...form, max_students: v })} /></Field>
 
           <Field label="Billing cycle" className="sm:col-span-2">

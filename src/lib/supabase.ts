@@ -7,3 +7,25 @@ const SUPABASE_ANON_KEY =
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+
+// ── Audit Log Helper ──────────────────────────────────────────
+export async function logAudit(params: {
+  user_id?: string | null;
+  branch_id?: string | null;
+  action: string;
+  entity_type?: string;
+  entity_id?: string;
+  description?: string;
+  metadata?: Record<string, any>;
+}) {
+  try {
+    await supabase.from("audit_logs").insert({
+      id: crypto.randomUUID(),
+      ...params,
+      created_at: new Date().toISOString(),
+    });
+  } catch {
+    // Non-blocking — never crash the app due to audit logging
+  }
+}

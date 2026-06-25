@@ -98,7 +98,7 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const { data: courses } = useQuery({ queryKey: ["assess-courses"], queryFn: async () => (await supabase.from("courses").select("id,name")).data ?? [] });
   const [form, setForm] = useState({
     student_id: "", course_id: "", title: "", assessment_date: new Date().toISOString().slice(0, 10),
-    score: 0, max_score: 100, feedback: "",
+    score: 0, max_score: 100, notes: "",
   });
   const [saving, setSaving] = useState(false);
   async function save() {
@@ -111,7 +111,7 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         assessed_by: user?.id,
       };
       if (!payload.course_id) delete payload.course_id;
-      await supabase.from("assessments").insert(payload).throwOnError();
+      await supabase.from("assessments").insert({...payload, instructor_id: user?.linked_entity_id || null}).throwOnError();
       toast.success("Saved"); onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
@@ -134,8 +134,8 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           <Field label="Title" className="sm:col-span-2"><Input value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></Field>
           <Field label="Score"><Input type="number" value={String(form.score)} onChange={(v) => setForm({ ...form, score: Number(v) })} /></Field>
           <Field label="Max score"><Input type="number" value={String(form.max_score)} onChange={(v) => setForm({ ...form, max_score: Number(v) })} /></Field>
-          <Field label="Feedback" className="sm:col-span-2">
-            <textarea value={form.feedback} rows={3} onChange={(e) => setForm({ ...form, feedback: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
+          <Field label="Notes / Feedback" className="sm:col-span-2">
+            <textarea value={form.notes} rows={3} onChange={(e) => setForm({ ...form, feedback: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
           </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">

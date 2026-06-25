@@ -60,13 +60,20 @@ function AdminDash() {
   const chartData = useQuery({
     queryKey: ["admin-revenue-chart"],
     queryFn: async () => {
-      const out: { month: string; revenue: number }[] = [];
+      const out: { month: string; revenue: number; expenses: number }[] = [];
       for (let i = 5; i >= 0; i--) {
         const d = subMonths(new Date(), i);
         const start = formatISO(startOfMonth(d), { representation: "date" });
         const end = formatISO(endOfMonth(d), { representation: "date" });
-        const { data } = await supabase.from("payments").select("amount").gte("payment_date", start).lte("payment_date", end);
-        out.push({ month: format(d, "MMM"), revenue: (data ?? []).reduce((s, p: any) => s + Number(p.amount), 0) });
+        const [rev, exp] = await Promise.all([
+          supabase.from("payments").select("amount").gte("payment_date", start).lte("payment_date", end),
+          supabase.from("expenditures").select("amount").gte("expense_date", start).lte("expense_date", end),
+        ]);
+        out.push({
+          month: format(d, "MMM"),
+          revenue: (rev.data ?? []).reduce((s, p: any) => s + Number(p.amount), 0),
+          expenses: (exp.data ?? []).reduce((s, e: any) => s + Number(e.amount), 0),
+        });
       }
       return out;
     },
@@ -113,7 +120,8 @@ function AdminDash() {
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip cursor={{ fill: "rgba(255,255,255,0.05)" }} contentStyle={{ background: "#1a1035", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8 }} formatter={(v: any) => formatKES(Number(v))} />
-                <Bar dataKey="revenue" fill="#d4a017" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="revenue" fill="#d4a017" radius={[6, 6, 0, 0]} name="Revenue" />
+                <Bar dataKey="expenses" fill="#ef4444" radius={[6, 6, 0, 0]} name="Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </div>
