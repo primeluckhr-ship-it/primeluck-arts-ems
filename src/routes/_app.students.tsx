@@ -21,6 +21,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function StudentsPage() {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
