@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus, BookOpen, Share2, MessageCircle, Calendar } from "lucide-react";
+import { Plus, BookOpen, Share2, MessageCircle, Calendar, Sparkles, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Field, Input } from "./_app.students";
@@ -184,6 +184,70 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
     homework: initial?.homework ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiOpen, setAiOpen] = useState(!initial); // open by default for new plans
+
+  async function generateWithAI() {
+    if (!aiPrompt.trim()) { toast.error("Describe the lesson topic first"); return; }
+    setAiGenerating(true);
+    try {
+      const { data: courses } = await supabase.from("courses")
+        .select("name,programs(name)").eq("id", form.course_id).limit(1);
+      const courseName = courses?.[0]?.name ?? "";
+      const progName   = (courses?.[0] as any)?.programs?.name ?? "";
+
+      const systemPrompt = `You are an expert arts educator creating lesson plans for ${user?.branch_id === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts Academy"} in Nairobi, Kenya.
+Generate a structured, practical lesson plan. Respond ONLY with valid JSON — no markdown, no explanation.
+JSON format:
+{
+  "title": "lesson title",
+  "objectives": "2-3 clear learning objectives, each on a new line starting with •",
+  "materials": "bullet list of materials/supplies needed, each on a new line starting with •",
+  "activities": "step-by-step activities with timing, e.g. 1. Warm-up (10 min): ...",
+  "homework": "optional follow-up task or leave empty"
+}`;
+
+      const userMsg = `Create a ${form.duration_minutes}-minute lesson plan for:
+Topic: ${aiPrompt}
+${courseName ? `Course: ${courseName}` : ""}
+${progName ? `Program: ${progName}` : ""}
+Make it practical, engaging and age-appropriate.`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userMsg }],
+        }),
+      });
+
+      if (!res.ok) throw new Error("AI request failed");
+      const data = await res.json();
+      const text = data.content?.[0]?.text ?? "";
+
+      // Parse JSON response
+      const clean = text.replace(/```json|```/g, "").trim();
+      const plan = JSON.parse(clean);
+
+      setForm(f => ({
+        ...f,
+        title:      plan.title      || f.title,
+        objectives: plan.objectives || f.objectives,
+        materials:  plan.materials  || f.materials,
+        activities: plan.activities || f.activities,
+        homework:   plan.homework   || f.homework,
+      }));
+
+      setAiOpen(false); // collapse AI panel, show filled form
+      toast.success("Lesson plan generated — review and save");
+    } catch (e: any) {
+      toast.error("AI generation failed: " + e.message);
+    } finally { setAiGenerating(false); }
+  }
 
   const { data: courses } = useQuery({
     queryKey: ["courses-list"],
@@ -226,6 +290,53 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
       <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">{initial ? "Edit Lesson Plan" : "New Lesson Plan"}</h2>
+        {/* AI Lesson Generator */}
+        <div className="rounded-xl border border-accent/30 bg-accent/5 mb-3 overflow-hidden">
+          <button type="button" onClick={() => setAiOpen(!aiOpen)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-accent hover:bg-accent/10 transition-colors">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4"/>
+              AI Lesson Plan Generator
+              {form.title && !aiOpen && <span className="text-xs text-muted-foreground font-normal ml-1">— plan generated ✓</span>}
+            </div>
+            {aiOpen ? <ChevronUp className="size-4"/> : <ChevronDown className="size-4"/>}
+          </button>
+          {aiOpen && (
+            <div className="px-4 pb-4 space-y-3 border-t border-accent/20">
+              <p className="text-xs text-muted-foreground pt-3">
+                Describe the lesson and AI will generate the full plan — objectives, materials, activities and homework.
+              </p>
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="e.g. Introduction to watercolour for beginners, focusing on wet-on-wet technique and colour mixing..."
+                rows={3}
+                className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  "Intro to watercolour, 60 min, beginners",
+                  "Pencil sketching portraits, teens",
+                  "Acrylic painting basics, 45 min",
+                  "Guitar chord progressions, beginners",
+                  "Mixed media collage, adults",
+                ].map((s) => (
+                  <button key={s} type="button" onClick={() => setAiPrompt(s)}
+                    className="text-xs px-2.5 py-1 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors">
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={generateWithAI} disabled={aiGenerating || !aiPrompt.trim()}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-accent text-accent-foreground py-2.5 text-sm font-medium disabled:opacity-50 hover:opacity-90 transition">
+                {aiGenerating
+                  ? <><Loader2 className="size-4 animate-spin"/>Generating lesson plan…</>
+                  : <><Sparkles className="size-4"/>Generate Lesson Plan</>}
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Title" className="sm:col-span-2"><Input value={form.title} onChange={(v) => setForm({...form,title:v})}/></Field>
           <Field label="Course">
