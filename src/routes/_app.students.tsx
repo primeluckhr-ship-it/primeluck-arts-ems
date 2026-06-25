@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase, logAudit } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES, getStatusColor } from "@/lib/pla";
 import { Plus, Search, Pencil } from "lucide-react";
