@@ -151,8 +151,8 @@ function StudentsPage() {
 }
 
 function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
+  const { user } = useAuth();
   const [form, setForm] = useState({
-    admission_number: initial?.admission_number ?? "",
     first_name: initial?.first_name ?? "",
     last_name: initial?.last_name ?? "",
     date_of_birth: initial?.date_of_birth ?? "",
@@ -161,9 +161,7 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
     grade: initial?.grade ?? "",
     skill_level: initial?.skill_level ?? "Beginner",
     enrollment_date: initial?.enrollment_date ?? new Date().toISOString().slice(0, 10),
-    emergency_contact_name: initial?.emergency_contact_name ?? "",
-    emergency_contact_phone: initial?.emergency_contact_phone ?? "",
-    parent_phone: initial?.parent_phone ?? "",
+    parent_phone: initial?.parent_phone ?? initial?.emergency_contact_phone ?? "",
     notes: initial?.notes ?? "",
     status: initial?.status ?? "active",
     student_type: initial?.student_type ?? "adult",
@@ -177,20 +175,25 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
 
   const [institutionId, setInstitutionId] = useState(initial?.institution_id ?? "");
 
-  async function suggest() {
-    const { data } = await supabase.from("students").select("admission_number").order("admission_number", { ascending: false }).limit(1);
-    const last = data?.[0]?.admission_number ?? "PLA0000";
-    const n = parseInt(last.replace(/\D/g, "")) || 0;
-    setForm((f) => ({ ...f, admission_number: `PLA${String(n + 1).padStart(4, "0")}` }));
-  }
-
   async function save() {
     setSaving(true);
     try {
+      // Auto-generate admission number
+      const prefix = user?.branch_id === "dice-arts-nairobi" ? "DICE" : "PLA";
+      const { data: lastStu } = await supabase.from("students")
+        .select("admission_number")
+        .ilike("admission_number", `${prefix}%`)
+        .order("admission_number", { ascending: false }).limit(1);
+      const lastNum = parseInt((lastStu?.[0]?.admission_number ?? `${prefix}0000`).replace(/\D/g, "")) || 0;
+      const admission_number = initial?.admission_number || `${prefix}${String(lastNum + 1).padStart(4, "0")}`;
+
       const payload = { 
         ...form, 
+        admission_number,
         institution_id: institutionId || null,
         branch_id: user?.branch_id ?? "",
+        // map parent_phone to emergency_contact_phone for backwards compat
+        emergency_contact_phone: form.parent_phone || null,
       };
       if (initial) {
         const { error } = await supabase.from("students").update(payload).eq("id", initial.id);
@@ -231,13 +234,6 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
               </select>
             </Field>
           )}
-          <Field label="Admission #">
-            <div className="flex gap-2">
-              <input value={form.admission_number} onChange={(e) => setForm({ ...form, admission_number: e.target.value })}
-                className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm" />
-              {!initial && <button type="button" onClick={suggest} className="text-xs bg-muted px-2 rounded">Auto</button>}
-            </div>
-          </Field>
           <Field label="Status">
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
               className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
@@ -262,13 +258,9 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
             </select>
           </Field>
           <Field label="Enrollment date"><Input type="date" value={form.enrollment_date} onChange={(v) => setForm({ ...form, enrollment_date: v })} /></Field>
-          <Field label="Emergency contact name"><Input value={form.emergency_contact_name} onChange={(v) => setForm({ ...form, emergency_contact_name: v })} placeholder="Full name" /></Field>
-          <Field label="Emergency contact phone"><Input value={form.emergency_contact_phone} onChange={(v) => setForm({ ...form, emergency_contact_phone: v })} placeholder="+254…" /></Field>
-          {(form.student_type === "junior" || form.student_type === "teen") && (
-            <Field label="Parent / guardian WhatsApp" className="sm:col-span-2">
-              <Input value={form.parent_phone} onChange={(v) => setForm({ ...form, parent_phone: v })} placeholder="+254… (for automated reminders)" />
-            </Field>
-          )}
+          <Field label="Parent / Guardian Phone" className="sm:col-span-2">
+            <Input value={form.parent_phone} onChange={(v) => setForm({ ...form, parent_phone: v })} placeholder="+254… — used for WhatsApp reminders" />
+          </Field>
           <Field label="Notes" className="sm:col-span-2">
             <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={3} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
