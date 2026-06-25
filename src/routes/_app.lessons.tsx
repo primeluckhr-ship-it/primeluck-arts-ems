@@ -386,7 +386,6 @@ Make it practical, engaging and age-appropriate.`;
             </div>
           )}
         </div>
-        </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
           <button onClick={save} disabled={saving}
@@ -733,7 +732,6 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
               <p className="text-xs text-muted-foreground mt-1">Uploading photos… {uploadProgress}%</p>
             </div>
           )}
-        </div>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
