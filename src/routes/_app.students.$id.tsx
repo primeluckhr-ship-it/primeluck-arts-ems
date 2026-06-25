@@ -68,10 +68,11 @@ function StudentDetail() {
           <PageCard title="Profile">
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Info l="DOB" v={s.date_of_birth ? format(new Date(s.date_of_birth), "dd MMM yyyy") : "—"} />
-              <Info l="School" v={s.school || "—"} />
+              <Info l="School" v={s.school_name || "—"} />
               <Info l="Grade" v={s.grade || "—"} />
               <Info l="Enrollment" v={s.enrollment_date ? format(new Date(s.enrollment_date), "dd MMM yyyy") : "—"} />
-              <Info l="Emergency contact" v={s.emergency_contact || "—"} />
+              <Info l="Emergency contact" v={[s.emergency_contact_name, s.emergency_contact_phone].filter(Boolean).join(" · ") || "—"} />
+              {s.parent_phone && <Info l="Parent WhatsApp" v={s.parent_phone} />}
             </dl>
           </PageCard>
           <PageCard title="Parents">
