@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge, StatCard } from "@/components/app-shell";
 import { formatKES, getStatusColor, generateReceiptNumber, generateInvoiceNumber } from "@/lib/pla";
-import { Plus, Printer, MessageCircle, Wallet, AlertCircle, Receipt, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Printer, MessageCircle, Wallet, AlertCircle, Receipt, TrendingUp, TrendingDown, Paperclip, ExternalLink, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { format, formatISO } from "date-fns";
 import { Field, Input } from "./_app.students";
@@ -421,7 +421,9 @@ function ExpenditureTab() {
         <table className="w-full text-sm">
           <thead><tr className="text-left text-muted-foreground border-b border-border">
             <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Category</th>
-            <th className="py-2 pr-3">Description</th><th className="py-2 pr-3">Method</th><th className="py-2 text-right">Amount</th>
+            <th className="py-2 pr-3">Description</th><th className="py-2 pr-3">Method</th>
+            <th className="py-2 pr-3 text-center">Receipt</th>
+            <th className="py-2 text-right">Amount</th>
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
@@ -431,6 +433,18 @@ function ExpenditureTab() {
                 <td className="py-2.5 pr-3"><Badge className="bg-muted text-muted-foreground border-border">{e.category}</Badge></td>
                 <td className="py-2.5 pr-3">{e.description}</td>
                 <td className="py-2.5 pr-3 text-xs capitalize">{e.payment_method}</td>
+                <td className="py-2.5 pr-3 text-center">
+                  {e.receipt_path ? (
+                    <a href={supabase.storage.from("receipts").getPublicUrl(e.receipt_path).data.publicUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      title="View receipt"
+                      className="inline-flex items-center justify-center size-7 rounded-md bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors">
+                      {e.receipt_path.endsWith(".pdf") ? <FileText className="size-3.5"/> : <Paperclip className="size-3.5"/>}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground/40 text-xs">—</span>
+                  )}
+                </td>
                 <td className="py-2.5 text-right font-semibold text-danger">{formatKES(e.amount)}</td>
               </tr>
             ))}
@@ -447,17 +461,37 @@ function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
   const { user } = useAuth();
   const [form, setForm] = useState({ category:"", description:"", amount:"", expense_date: new Date().toISOString().slice(0,10), payment_method:"cash", receipt_ref:"" });
   const [saving, setSaving] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File|null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string>("");
+
+  function onReceiptChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReceiptFile(file);
+    if (file.type.startsWith("image/")) {
+      setReceiptPreview(URL.createObjectURL(file));
+    } else {
+      setReceiptPreview("pdf");
+    }
+  }
   const CATS = ["Rent","Utilities","Instructor Pay","Transport","Supplies","Marketing","Maintenance","Other"];
   async function save() {
     if (!form.category||!form.description||!form.amount) { toast.error("Fill all required fields"); return; }
     setSaving(true);
     try {
+      let receiptPath: string|null = null;
+      if (receiptFile) {
+        const ext = receiptFile.name.split(".").pop() ?? "jpg";
+        const path = `${user?.branch_id??"pla"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("receipts").upload(path, receiptFile, { upsert: true });
+        if (!upErr) receiptPath = path;
+      }
       const { error } = await supabase.from("expenditures").insert({
         ...form, amount: Number(form.amount), branch_id: user?.branch_id??"",
-        created_by: user?.id,
+        created_by: user?.id, receipt_path: receiptPath,
       });
       if (error) throw error;
-      toast.success("Expenditure recorded");
+      toast.success("Expenditure recorded" + (receiptPath ? " · receipt uploaded ✓" : ""));
       onSaved();
     } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
   }
@@ -481,6 +515,33 @@ function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
             </select>
           </Field>
           <Field label="Receipt ref"><Input value={form.receipt_ref} onChange={(v) => setForm({...form,receipt_ref:v})} placeholder="Optional"/></Field>
+
+          {/* Receipt upload */}
+          <Field label="Attach receipt (photo or PDF)" className="sm:col-span-2">
+            <label className={`flex items-center gap-3 cursor-pointer rounded-lg border-2 border-dashed p-3 transition-colors ${receiptFile ? "border-accent bg-accent/5" : "border-border hover:border-accent"}`}>
+              <input type="file" accept="image/*,.pdf" className="hidden" onChange={onReceiptChange}/>
+              {receiptPreview === "pdf" ? (
+                <div className="flex items-center gap-2 text-sm text-accent">
+                  <FileText className="size-5"/>
+                  <span>{receiptFile?.name}</span>
+                </div>
+              ) : receiptPreview ? (
+                <div className="flex items-center gap-3">
+                  <img src={receiptPreview} alt="Receipt preview" className="size-16 rounded object-cover border border-border"/>
+                  <span className="text-sm text-accent">{receiptFile?.name}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Paperclip className="size-4"/>
+                  <span>Tap to attach receipt — photo or PDF</span>
+                </div>
+              )}
+            </label>
+            {receiptFile && (
+              <button type="button" onClick={() => { setReceiptFile(null); setReceiptPreview(""); }}
+                className="text-xs text-muted-foreground hover:text-danger mt-1">Remove</button>
+            )}
+          </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
