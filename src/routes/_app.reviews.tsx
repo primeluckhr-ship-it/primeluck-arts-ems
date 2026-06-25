@@ -8,7 +8,7 @@ import { Star, Sparkles, Loader2, CheckCircle2, MessageSquare, Link2 } from "luc
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-export const Route = createFileRoute("/_app/feedback")({ component: FeedbackAdminPage });
+export const Route = createFileRoute("/_app/reviews")({ component: FeedbackAdminPage });
 
 const STATUS_COLORS: Record<string,string> = {
   new:      "bg-blue-500/15 text-blue-400 border-blue-500/30",

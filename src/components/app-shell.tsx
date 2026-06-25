@@ -33,7 +33,7 @@ const NAV: Item[] = [
   { to: "/projects", label: "Projects", icon: <Target className="size-5" />, roles: ["super_admin","dice_admin","teacher","finance_admin"] },
   { to: "/lessons", label: "Lessons & Reports", icon: <BookOpenCheck className="size-5" />, roles: ["super_admin","dice_admin","teacher"] },
   { to: "/dice-institutions", label: "Partner Schools", icon: <Building2 className="size-5" />, roles: ["super_admin","dice_admin"] },
-  { to: "/feedback", label: "Feedback", icon: <MessageSquare className="size-5" />, roles: ["super_admin","finance_admin","dice_admin"] },
+  { to: "/reviews", label: "Feedback & Reviews", icon: <MessageSquare className="size-5" />, roles: ["super_admin","finance_admin","dice_admin"] },
   { to: "/fund-requests", label: "Fund Requests", icon: <ClipboardCheck className="size-5" />, roles: ["super_admin","finance_admin","teacher","dice_admin"] },
 ];
 

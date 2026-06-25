@@ -33,7 +33,7 @@ import { Route as AppProjectsRouteImport } from './routes/_app.projects'
 import { Route as AppLessonsRouteImport } from './routes/_app.lessons'
 import { Route as AppDiceInstitutionsRouteImport } from './routes/_app.dice-institutions'
 import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as AppAdminFeedbackRouteImport } from './routes/_app.feedback'
+import { Route as AppReviewsRouteImport } from './routes/_app.reviews'
 import { Route as AppFundRequestsRouteImport } from './routes/_app.fund-requests'
 
 
@@ -58,9 +58,9 @@ const FeedbackRoute = FeedbackRouteImport.update({
   path: '/feedback',
   getParentRoute: () => rootRoute,
 } as any)
-const AppAdminFeedbackRoute = AppAdminFeedbackRouteImport.update({
-  id: '/feedback',
-  path: '/feedback',
+const AppReviewsRoute = AppReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
   getParentRoute: () => AppRoute,
 } as any)
 const AppFundRequestsRoute = AppFundRequestsRouteImport.update({
@@ -457,11 +457,11 @@ interface AppStudentsRouteChildren {
 const AppStudentsRouteChildren: AppStudentsRouteChildren = {
   AppStudentsIdRoute: AppStudentsIdRoute,
     AppProjectsRoute,
-    AppAdminFeedbackRoute,
+    AppReviewsRoute,
     AppFundRequestsRoute,
     AppLessonsRoute,
     AppDiceInstitutionsRoute,
-    AppAdminFeedbackRoute,
+    AppReviewsRoute,
     AppFundRequestsRoute,
 }
 
@@ -494,7 +494,7 @@ const AppRouteChildren: AppRouteChildren = {
     AppProjectsRoute,
     AppLessonsRoute,
     AppDiceInstitutionsRoute,
-    AppAdminFeedbackRoute,
+    AppReviewsRoute,
     AppFundRequestsRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
