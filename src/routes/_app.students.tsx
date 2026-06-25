@@ -244,18 +244,6 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
         <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
           <Field label="First name"><Input value={form.first_name} onChange={(v) => setForm({ ...form, first_name: v })} /></Field>
           <Field label="Last name"><Input value={form.last_name} onChange={(v) => setForm({ ...form, last_name: v })} /></Field>
-          <Field label="Date of birth">
-            <input type="date" value={form.date_of_birth}
-              onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
-              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
-          </Field>
-          <Field label="Gender">
-            <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
-              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-              <option value="">— Select —</option><option value="male">Male</option>
-              <option value="female">Female</option><option value="other">Other</option>
-            </select>
-          </Field>
           <Field label="Parent / Guardian Phone" className="sm:col-span-2">
             <Input value={form.parent_phone} onChange={(v) => setForm({ ...form, parent_phone: v })} placeholder="+254… — WhatsApp reminders sent here" />
           </Field>
