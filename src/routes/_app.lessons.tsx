@@ -233,43 +233,25 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
         .select("id,name").eq("id", form.course_id).limit(1);
       const courseName = courses?.[0]?.name ?? "";
 
-      const systemPrompt = `You are an expert arts educator creating lesson plans for ${user?.branch_id === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts Academy"} in Nairobi, Kenya.
-Generate a structured, practical lesson plan. Respond ONLY with valid JSON — no markdown, no explanation.
-JSON format:
-{
-  "title": "lesson title",
-  "objectives": "2-3 clear learning objectives, each on a new line starting with •",
-  "materials": "bullet list of materials/supplies needed, each on a new line starting with •",
-  "activities": "step-by-step activities with timing, e.g. 1. Warm-up (10 min): ...",
-  "homework": "optional follow-up task or leave empty"
-}`;
-
-      const userMsg = `Create a ${form.duration_minutes}-minute lesson plan for:
-Topic: ${aiPrompt}
-${courseName ? `Course: ${courseName}` : ""}
-Make it practical, engaging and age-appropriate.`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      // Call Supabase edge function proxy (keeps API key server-side)
+      const res = await fetch("https://xgwfodwaczyrnxagyzhl.supabase.co/functions/v1/ai-lesson-plan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhnd2ZvZHdhY3p5cm54YWd5emhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMTk3MjksImV4cCI6MjA5NzY5NTcyOX0.5WYZgeUA6eVw9EOzu9qlA_FUKVIARnfcTDb8VyKNM7M",
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhnd2ZvZHdhY3p5cm54YWd5emhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMTk3MjksImV4cCI6MjA5NzY5NTcyOX0.5WYZgeUA6eVw9EOzu9qlA_FUKVIARnfcTDb8VyKNM7M",
+        },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userMsg }],
+          topic: aiPrompt,
+          courseName,
+          duration: form.duration_minutes,
+          branch: formBranch,
         }),
       });
 
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody?.error?.message ?? `API error ${res.status}`);
-      }
-      const data = await res.json();
-      const text = data.content?.[0]?.text ?? "";
-
-      // Parse JSON response
-      const clean = text.replace(/```json|```/g, "").trim();
-      const plan = JSON.parse(clean);
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error ?? `Error ${res.status}`);
+      const plan = json.plan;
 
       // Build a compact notes summary from the AI content
       const autoNotes = [
