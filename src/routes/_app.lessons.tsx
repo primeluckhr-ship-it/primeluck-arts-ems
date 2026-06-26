@@ -243,7 +243,16 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiOpen, setAiOpen] = useState(!initial); // open by default for new plans
   const [requestMaterials, setRequestMaterials] = useState(false);
-  const [materialAmount, setMaterialAmount] = useState("");
+  const [matItems, setMatItems] = useState<{ name: string; qty: string; cost: string }[]>([
+    { name: "", qty: "1", cost: "" }
+  ]);
+  const matTotal = matItems.reduce((s, i) => s + (Number(i.qty) || 1) * (Number(i.cost) || 0), 0);
+
+  function addMatItem() { setMatItems([...matItems, { name: "", qty: "1", cost: "" }]); }
+  function removeMatItem(i: number) { setMatItems(matItems.filter((_, idx) => idx !== i)); }
+  function updateMatItem(i: number, field: string, val: string) {
+    setMatItems(matItems.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
+  }
 
   async function generateWithAI() {
     if (!aiPrompt.trim()) { toast.error("Describe the lesson topic first"); return; }
@@ -329,8 +338,8 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
             lesson_plan_id: inserted.id,
             title: `Materials for: ${form.title}`,
             category: "materials",
-            description: `Lesson: ${form.title} (${form.lesson_date})\n\nMaterials needed:\n${form.materials}`,
-            amount: Number(materialAmount) || null,
+            description: `Lesson: ${form.title} (${form.lesson_date})\n\nItemised materials:\n${matItems.filter(i => i.name).map(i => `• ${i.name} × ${i.qty || 1} @ KES ${Number(i.cost).toLocaleString()} = KES ${((Number(i.qty)||1)*(Number(i.cost)||0)).toLocaleString()}`).join("\n")}\n\nTotal: KES ${matTotal.toLocaleString()}`,
+            amount: matTotal || null,
             urgency: "normal",
             status: "pending",
           });
@@ -426,21 +435,52 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
                 </label>
               </div>
               {requestMaterials && (
-                <div className="flex items-center gap-2 pl-7">
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">Estimated cost (KES)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={materialAmount}
-                    onChange={(e) => setMaterialAmount(e.target.value)}
-                    placeholder="e.g. 3500"
-                    className="flex-1 bg-background border border-input rounded-md px-3 py-1.5 text-sm"
-                  />
-                  {Number(materialAmount) > 0 && (
-                    <span className="text-xs font-semibold text-success whitespace-nowrap">
-                      KES {Number(materialAmount).toLocaleString()}
-                    </span>
-                  )}
+                <div className="pl-1 space-y-2">
+                  {/* Column headers */}
+                  <div className="grid grid-cols-[1fr_56px_80px_24px] gap-1.5 px-1">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Item</span>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center">Qty</span>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-right">Unit cost (KES)</span>
+                    <span/>
+                  </div>
+                  {/* Item rows */}
+                  {matItems.map((item, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_56px_80px_24px] gap-1.5 items-center">
+                      <input
+                        value={item.name}
+                        onChange={(e) => updateMatItem(i, "name", e.target.value)}
+                        placeholder={`Material ${i + 1}`}
+                        className="bg-background border border-input rounded px-2 py-1 text-xs w-full"
+                      />
+                      <input
+                        type="number" min={1}
+                        value={item.qty}
+                        onChange={(e) => updateMatItem(i, "qty", e.target.value)}
+                        className="bg-background border border-input rounded px-2 py-1 text-xs text-center w-full"
+                      />
+                      <input
+                        type="number" min={0}
+                        value={item.cost}
+                        onChange={(e) => updateMatItem(i, "cost", e.target.value)}
+                        placeholder="0"
+                        className="bg-background border border-input rounded px-2 py-1 text-xs text-right w-full"
+                      />
+                      <button type="button" onClick={() => removeMatItem(i)}
+                        className="text-muted-foreground hover:text-destructive text-xs text-center">✕</button>
+                    </div>
+                  ))}
+                  {/* Add row + total */}
+                  <div className="flex items-center justify-between pt-1">
+                    <button type="button" onClick={addMatItem}
+                      className="text-xs text-accent hover:underline flex items-center gap-1">
+                      + Add item
+                    </button>
+                    {matTotal > 0 && (
+                      <div className="text-xs font-bold text-success">
+                        Total: KES {matTotal.toLocaleString()}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
