@@ -50,11 +50,19 @@ function AttendancePage() {
 
   async function deleteSession(session: any, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm(`Delete "${session.courses?.name}" session on ${session.session_date}? All attendance records for this session will also be removed.`)) return;
-    await supabase.from("attendance_records").delete().eq("session_id", session.id);
-    await supabase.from("sessions").delete().eq("id", session.id);
-    qc.invalidateQueries({ queryKey: ["sessions-today"], exact: false });
-    toast.success("Session deleted");
+    if (!confirm(`Delete "${session.courses?.name}" session on ${session.session_date}?\nThis removes all attendance records for this session.`)) return;
+    try {
+      // Clear all FK references before deleting session
+      await supabase.from("attendance_records").delete().eq("session_id", session.id);
+      await supabase.from("attendance_charges").delete().eq("session_id", session.id);
+      await supabase.from("lesson_plans").update({ session_id: null }).eq("session_id", session.id);
+      const { error } = await supabase.from("sessions").delete().eq("id", session.id);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["sessions-today"], exact: false });
+      toast.success("Session deleted");
+    } catch (e: any) {
+      toast.error("Could not delete session: " + e.message);
+    }
   }
 
   if (selectedSession) {

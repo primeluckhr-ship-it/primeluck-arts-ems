@@ -135,7 +135,7 @@ function LessonPlansTab() {
       </div>
       {open && (
         <LessonPlanForm initial={editing} onClose={() => setOpen(false)}
-          onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["lesson-plans"] }); }}/>
+          onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["lesson-plans"], exact: false }); }}/>
       )}
     </PageCard>
   );
@@ -160,19 +160,24 @@ function GoogleCalendarSync({ plan }: { plan: any }) {
     const totalM = startH * 60 + startM + durationMins;
     const endHHMM = `${String(Math.floor(totalM/60)).padStart(2,"0")}${String(totalM%60).padStart(2,"0")}`;
 
-    // Build a clean summary for notes
-    const summary = [
-      plan.objectives ? `🎯 Objectives: ${plan.objectives.slice(0,200)}` : "",
-      plan.materials  ? `📦 Materials: ${plan.materials.slice(0,150)}`   : "",
-      plan.activities ? `🎨 Activities: ${plan.activities.slice(0,200)}` : "",
-      plan.homework   ? `📚 Homework: ${plan.homework.slice(0,150)}`     : "",
-    ].filter(Boolean).join("\n\n");
+    // Build structured lesson notes for calendar description
+    const lines: string[] = [];
+    if (plan.courses?.name) lines.push(`📚 Course: ${plan.courses.name}`);
+    if (plan.duration_minutes) lines.push(`⏱ Duration: ${plan.duration_minutes} minutes`);
+    if (plan.notes) lines.push(`📝 Summary: ${plan.notes}`);
+    lines.push("");
+    if (plan.objectives)  lines.push(`🎯 OBJECTIVES\n${plan.objectives}`);
+    if (plan.materials)   lines.push(`\n📦 MATERIALS NEEDED\n${plan.materials}`);
+    if (plan.activities)  lines.push(`\n🎨 ACTIVITIES\n${plan.activities}`);
+    if (plan.homework)    lines.push(`\n📚 HOMEWORK\n${plan.homework}`);
+    lines.push(`\n— Scheduled via ${academyName} EMS`);
+    const description = lines.join("\n");
 
     const params = new URLSearchParams({
       action: "TEMPLATE",
       text: `${plan.title}${plan.courses?.name ? ` — ${plan.courses.name}` : ""}`,
       dates: `${date}T${startHHMM}00/${date}T${endHHMM}00`,
-      details: summary || `Lesson plan for ${academyName}`,
+      details: description,
       location: academyName,
       add: academyEmail,
     });
@@ -225,9 +230,8 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
     setAiGenerating(true);
     try {
       const { data: courses } = await supabase.from("courses")
-        .select("name,programs(name)").eq("id", form.course_id).limit(1);
+        .select("id,name").eq("id", form.course_id).limit(1);
       const courseName = courses?.[0]?.name ?? "";
-      const progName   = (courses?.[0] as any)?.programs?.name ?? "";
 
       const systemPrompt = `You are an expert arts educator creating lesson plans for ${user?.branch_id === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts Academy"} in Nairobi, Kenya.
 Generate a structured, practical lesson plan. Respond ONLY with valid JSON — no markdown, no explanation.
@@ -243,7 +247,6 @@ JSON format:
       const userMsg = `Create a ${form.duration_minutes}-minute lesson plan for:
 Topic: ${aiPrompt}
 ${courseName ? `Course: ${courseName}` : ""}
-${progName ? `Program: ${progName}` : ""}
 Make it practical, engaging and age-appropriate.`;
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -257,7 +260,10 @@ Make it practical, engaging and age-appropriate.`;
         }),
       });
 
-      if (!res.ok) throw new Error("AI request failed");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error?.message ?? `API error ${res.status}`);
+      }
       const data = await res.json();
       const text = data.content?.[0]?.text ?? "";
 
@@ -284,7 +290,7 @@ Make it practical, engaging and age-appropriate.`;
       setAiOpen(false); // collapse AI panel, show filled form
       toast.success("Lesson plan generated — review and save");
     } catch (e: any) {
-      toast.error("AI generation failed: " + e.message);
+      toast.error("AI generation unavailable — fill the form manually and click Save");
     } finally { setAiGenerating(false); }
   }
 
@@ -316,7 +322,7 @@ Make it practical, engaging and age-appropriate.`;
         toast.success("Lesson plan created");
       }
       onSaved();
-    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+    } catch (e: any) { toast.error("Save failed: " + e.message); console.error("Lesson plan save error:", e); } finally { setSaving(false); }
   }
 
   const TA = ({ label, field }: { label: string; field: keyof typeof form }) => (
@@ -692,7 +698,7 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
       }
       toast.success(initial ? "Report updated" : "Report created");
       onSaved();
-    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+    } catch (e: any) { toast.error("Save failed: " + e.message); console.error("Lesson plan save error:", e); } finally { setSaving(false); }
   }
 
   const TA = ({ label, field, rows = 3 }: { label: string; field: keyof typeof form; rows?: number }) => (
