@@ -94,13 +94,24 @@ function StudentsPage() {
 
   async function deleteStudent(s: any) {
     if (!confirm(`Permanently delete ${s.first_name} ${s.last_name}? This cannot be undone and will remove all records.`)) return;
-    await supabase.from("attendance_records").delete().eq("student_id", s.id);
-    await supabase.from("course_enrollments").delete().eq("student_id", s.id);
-    await supabase.from("student_accounts").delete().eq("student_id", s.id);
-    await supabase.from("student_parents").delete().eq("student_id", s.id);
-    await supabase.from("students").delete().eq("id", s.id);
-    qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
-    toast.success(`${s.first_name} ${s.last_name} deleted`);
+    try {
+      await supabase.from("attendance_charges").delete().eq("student_id", s.id);
+      await supabase.from("attendance_records").delete().eq("student_id", s.id);
+      await supabase.from("student_progress_reports").delete().eq("student_id", s.id);
+      await supabase.from("assessments").delete().eq("student_id", s.id);
+      await supabase.from("artwork_portfolio").delete().eq("student_id", s.id);
+      await supabase.from("invoices").delete().eq("student_id", s.id);
+      await supabase.from("payments").delete().eq("student_id", s.id);
+      await supabase.from("course_enrollments").delete().eq("student_id", s.id);
+      await supabase.from("student_accounts").delete().eq("student_id", s.id);
+      await supabase.from("student_parents").delete().eq("student_id", s.id);
+      const { error } = await supabase.from("students").delete().eq("id", s.id);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
+      toast.success(`${s.first_name} ${s.last_name} permanently deleted`);
+    } catch (e: any) {
+      toast.error("Delete failed: " + e.message);
+    }
   }
 
   return (
@@ -227,9 +238,14 @@ function StudentsPage() {
                           </>
                         )}
                         {isAdmin && showAlumni && (
-                          <button onClick={() => removeStudent(s, "active")} className="p-1.5 rounded hover:bg-success/20 text-success text-xs px-2" title="Restore">
-                            Restore
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => removeStudent(s, "active")} className="p-1.5 rounded hover:bg-success/20 text-success text-xs px-2" title="Restore">
+                              Restore
+                            </button>
+                            <button onClick={() => deleteStudent(s)} className="p-1.5 rounded hover:bg-destructive/20 text-destructive" title="Permanently delete">
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </td>
