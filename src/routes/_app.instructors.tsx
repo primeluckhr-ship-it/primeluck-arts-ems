@@ -25,6 +25,7 @@ function InstructorsPage() {
     try {
       // Clear FK references on courses first to avoid constraint violation
       await supabase.from("courses").update({ instructor_id: null }).eq("instructor_id", inst.id);
+      await supabase.from("fund_requests").update({ instructor_id: null }).eq("instructor_id", inst.id);
       // Also clear from lesson_plans
       await supabase.from("lesson_plans").update({ instructor_id: null }).eq("instructor_id", inst.id);
       const { error } = await supabase.from("instructors").delete().eq("id", inst.id);
