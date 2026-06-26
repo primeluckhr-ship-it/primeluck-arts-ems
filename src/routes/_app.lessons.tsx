@@ -205,6 +205,24 @@ function WhatsAppSharePlan({ plan }: { plan: any }) {
   );
 }
 
+// TA is outside LessonPlanForm so React doesn't remount it on every render (fixes frozen textareas)
+function TA({ label, field, form, setForm }: {
+  label: string; field: string;
+  form: Record<string, any>; setForm: (f: any) => void;
+}) {
+  return (
+    <Field label={label} className="sm:col-span-2">
+      <textarea
+        value={form[field] ?? ""}
+        onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+        rows={3}
+        className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
+        placeholder={`Enter ${label.toLowerCase()}…`}
+      />
+    </Field>
+  );
+}
+
 function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
   const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({
@@ -224,6 +242,7 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiOpen, setAiOpen] = useState(!initial); // open by default for new plans
+  const [requestMaterials, setRequestMaterials] = useState(false);
 
   async function generateWithAI() {
     if (!aiPrompt.trim()) { toast.error("Describe the lesson topic first"); return; }
@@ -299,21 +318,30 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
         if (error) throw error;
         toast.success("Plan updated");
       } else {
-        const { error } = await supabase.from("lesson_plans").insert(payload);
+        const { error, data: inserted } = await supabase.from("lesson_plans").insert(payload).select().single();
         if (error) throw error;
-        toast.success("Lesson plan created");
+        // Auto-create material fund request if requested
+        if (requestMaterials && form.materials.trim() && inserted) {
+          await supabase.from("fund_requests").insert({
+            branch_id: payload.branch_id,
+            instructor_id: form.instructor_id || null,
+            lesson_plan_id: inserted.id,
+            title: `Materials for: ${form.title}`,
+            category: "materials",
+            description: `Lesson: ${form.title} (${form.lesson_date})\n\nMaterials needed:\n${form.materials}`,
+            urgency: "normal",
+            status: "pending",
+          });
+          toast.success("Lesson plan created + material request sent to admin ✓");
+        } else {
+          toast.success("Lesson plan created");
+        }
       }
       onSaved();
     } catch (e: any) { toast.error("Save failed: " + e.message); console.error("Lesson plan save error:", e); } finally { setSaving(false); }
   }
 
-  const TA = ({ label, field }: { label: string; field: keyof typeof form }) => (
-    <Field label={label} className="sm:col-span-2">
-      <textarea value={form[field] as string} onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-        rows={3} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
-        placeholder={`Enter ${label.toLowerCase()}…`}/>
-    </Field>
-  );
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
@@ -382,10 +410,21 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
           </Field>
           <Field label="Date"><Input type="date" value={form.lesson_date} onChange={(v) => setForm({...form,lesson_date:v})}/></Field>
           <Field label="Duration (minutes)"><Input type="number" value={String(form.duration_minutes)} onChange={(v) => setForm({...form,duration_minutes:Number(v)})}/></Field>
-          <TA label="Learning Objectives" field="objectives"/>
-          <TA label="Materials Needed" field="materials"/>
-          <TA label="Activities" field="activities"/>
-          <TA label="Homework / Follow-up" field="homework"/>
+          <TA label="Learning Objectives" field="objectives" form={form} setForm={setForm}/>
+          <TA label="Materials Needed" field="materials" form={form} setForm={setForm}/>
+          {form.materials.trim() && (
+            <div className="sm:col-span-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-accent/5 border border-accent/20">
+              <input type="checkbox" id="req-materials" checked={requestMaterials}
+                onChange={(e) => setRequestMaterials(e.target.checked)}
+                className="size-4 rounded accent-accent cursor-pointer"/>
+              <label htmlFor="req-materials" className="text-xs cursor-pointer select-none">
+                <span className="font-medium text-accent">📋 Send as material request to admin</span>
+                <span className="text-muted-foreground ml-1">— auto-creates a fund request for these items</span>
+              </label>
+            </div>
+          )}
+          <TA label="Activities" field="activities" form={form} setForm={setForm}/>
+          <TA label="Homework / Follow-up" field="homework" form={form} setForm={setForm}/>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
