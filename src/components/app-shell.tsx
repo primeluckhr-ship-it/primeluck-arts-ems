@@ -94,6 +94,29 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!collapsed && (<div className="leading-tight"><div className="text-sm font-bold tracking-wide">{viewBranch === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{viewBranch === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>)}
         </div>
         {SidebarBody}
+        {user.role === "super_admin" && (
+          <div className={`px-2 py-2 border-t border-sidebar-border ${collapsed ? "flex justify-center" : ""}`}>
+            {collapsed ? (
+              <button onClick={() => setActiveBranch(activeBranch === "dice-arts-nairobi" ? "branch-1" : "dice-arts-nairobi")}
+                className="w-10 h-10 rounded-lg border-2 border-accent flex items-center justify-center text-xs font-black text-accent"
+                title={`Switch to ${activeBranch === "dice-arts-nairobi" ? "PrimeLuck" : "Dice Arts"}`}>
+                {activeBranch === "dice-arts-nairobi" ? "PLA" : "DA"}
+              </button>
+            ) : (
+              <div className="w-full">
+                <p className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50 px-1 mb-1">Switch Academy</p>
+                <div className="flex rounded-lg border border-sidebar-border overflow-hidden w-full">
+                  {branches.map((b) => (
+                    <button key={b.id} onClick={() => setActiveBranch(b.id)}
+                      className={`flex-1 py-2 text-xs font-semibold transition-colors ${activeBranch === b.id ? "bg-accent text-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent"}`}>
+                      {b.short}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="p-2 border-t border-sidebar-border">
           <button onClick={() => setCollapsed((v) => !v)} className="w-full flex items-center justify-center gap-2 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground py-2 rounded-md hover:bg-sidebar-accent">
             <Menu className="size-4" />{!collapsed && <span>Collapse</span>}
@@ -108,6 +131,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Logo size={36} branch={viewBranch ?? ""} /><div className="leading-tight"><div className="text-sm font-bold tracking-wide">{viewBranch === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{viewBranch === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>
             </div>
             {SidebarBody}
+            {user.role === "super_admin" && (
+              <div className="px-3 py-2 border-t border-sidebar-border">
+                <p className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50 mb-1">Switch Academy</p>
+                <div className="flex rounded-lg border border-sidebar-border overflow-hidden">
+                  {branches.map((b) => (
+                    <button key={b.id} onClick={() => { setActiveBranch(b.id); setMobileOpen(false); }}
+                      className={`flex-1 py-2 text-xs font-semibold transition-colors ${activeBranch === b.id ? "bg-accent text-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent"}`}>
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </aside>
         </div>
       )}
@@ -116,16 +152,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="md:hidden p-2 rounded hover:bg-muted" onClick={() => setMobileOpen(true)}><Menu className="size-5" /></button>
           <h1 className="text-lg font-semibold truncate flex-1">{currentTitle}</h1>
           <span className="hidden sm:inline-flex items-center rounded-full bg-accent/15 text-accent border border-accent/30 px-3 py-1 text-xs font-semibold">{roleLabel(user.role)}</span>
-          {user.role === "super_admin" && (
-            <div className="hidden sm:flex items-center rounded-lg border border-border overflow-hidden text-xs font-semibold">
-              {branches.map((b) => (
-                <button key={b.id} onClick={() => setActiveBranch(b.id)}
-                  className={`px-3 py-1.5 transition-colors ${activeBranch === b.id ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-                  {b.short}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <div className="size-9 rounded-full bg-primary flex items-center justify-center font-semibold text-sm">{user.first_name[0]}{user.last_name[0]}</div>
             <div className="hidden sm:block leading-tight"><div className="text-sm font-medium">{user.first_name} {user.last_name}</div><div className="text-xs text-muted-foreground">{user.email}</div></div>
