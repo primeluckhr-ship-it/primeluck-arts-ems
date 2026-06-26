@@ -39,17 +39,29 @@ function LessonsPage() {
 
 /* ── LESSON PLANS ── */
 function LessonPlansTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [courseFilter, setCourseFilter] = useState("all");
   const qc = useQueryClient();
 
+  const branch = user?.role === "super_admin" ? (activeBranch ?? user?.branch_id) : user?.branch_id;
+
+  const { data: coursesForFilter } = useQuery({
+    queryKey: ["courses-filter", branch],
+    queryFn: async () => (await supabase.from("courses").select("id,name").eq("branch_id", branch ?? "").eq("status","active").order("name")).data ?? [],
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ["lesson-plans", user?.branch_id],
-    queryFn: async () => (await supabase.from("lesson_plans")
-      .select("*,courses(name),instructors(first_name,last_name)")
-      .eq("branch_id", user?.branch_id ?? "")
-      .order("lesson_date", { ascending: false })).data ?? [],
+    queryKey: ["lesson-plans", branch, courseFilter],
+    queryFn: async () => {
+      let q = supabase.from("lesson_plans")
+        .select("*,courses(name,branch_id),instructors(first_name,last_name)")
+        .eq("branch_id", branch ?? "")
+        .order("lesson_date", { ascending: false });
+      if (courseFilter !== "all") q = q.eq("course_id", courseFilter);
+      return (await q).data ?? [];
+    },
   });
 
   return (
@@ -60,6 +72,15 @@ function LessonPlansTab() {
           <Plus className="size-4"/>New Plan
         </button>
       }>
+      <div className="mb-3">
+        <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}
+          className="bg-background border border-input rounded-md px-3 py-2 text-sm w-full sm:w-auto">
+          <option value="all">All Courses</option>
+          {(coursesForFilter ?? []).map((co: any) => (
+            <option key={co.id} value={co.id}>{co.name}</option>
+          ))}
+        </select>
+      </div>
       {isLoading && <p className="py-6 text-center text-muted-foreground">Loading…</p>}
       <div className="space-y-3">
         {(data ?? []).map((plan: any) => (
@@ -81,6 +102,11 @@ function LessonPlansTab() {
                 <WhatsAppSharePlan plan={plan} />
               </div>
             </div>
+            {plan.notes && (
+              <div className="mt-2 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent/80 italic">
+                📝 {plan.notes}
+              </div>
+            )}
             {plan.objectives && (
               <div className="mt-3 grid sm:grid-cols-2 gap-2 text-xs">
                 <div className="rounded-md bg-muted/50 p-2">
@@ -117,40 +143,43 @@ function LessonPlansTab() {
 
 
 function GoogleCalendarSync({ plan }: { plan: any }) {
-  function syncToCalendar() {
-    if (!plan.lesson_date) { return; }
+  const { user } = useAuth();
+  const isDice = (plan.courses?.branch_id ?? user?.branch_id) === "dice-arts-nairobi";
+  const academyName  = isDice ? "Dice Arts Academy"    : "PrimeLuck Arts Academy";
+  const academyEmail = isDice ? "dicearts.academy@gmail.com" : "admin@primeluck.ac.ke";
 
-    // Build start/end datetime (lesson_date + duration)
+  function syncToCalendar() {
+    if (!plan.lesson_date) { toast.error("Set a lesson date first"); return; }
+
     const date = plan.lesson_date.replace(/-/g, "");
     const durationMins = Number(plan.duration_minutes ?? 60);
-    const startHour = "0900";  // default 9am if no time set
-    const endTime = (() => {
-      const h = 9 + Math.floor(durationMins / 60);
-      const m = durationMins % 60;
-      return `${String(h).padStart(2,"0")}${String(m).padStart(2,"0")}`;
-    })();
+    // Use lesson_time if stored, else default 9am
+    const startHHMM = plan.lesson_time ? plan.lesson_time.replace(":","") : "0900";
+    const [startH, startM] = [parseInt(startHHMM.slice(0,2)), parseInt(startHHMM.slice(2,4))];
+    const totalM = startH * 60 + startM + durationMins;
+    const endHHMM = `${String(Math.floor(totalM/60)).padStart(2,"0")}${String(totalM%60).padStart(2,"0")}`;
 
-    const details = [
-      plan.objectives   ? `🎯 Objectives:\n${plan.objectives}`   : "",
-      plan.materials    ? `📦 Materials:\n${plan.materials}`     : "",
-      plan.activities   ? `🎨 Activities:\n${plan.activities}`   : "",
-      plan.homework     ? `📚 Homework:\n${plan.homework}`       : "",
+    // Build a clean summary for notes
+    const summary = [
+      plan.objectives ? `🎯 Objectives: ${plan.objectives.slice(0,200)}` : "",
+      plan.materials  ? `📦 Materials: ${plan.materials.slice(0,150)}`   : "",
+      plan.activities ? `🎨 Activities: ${plan.activities.slice(0,200)}` : "",
+      plan.homework   ? `📚 Homework: ${plan.homework.slice(0,150)}`     : "",
     ].filter(Boolean).join("\n\n");
 
     const params = new URLSearchParams({
       action: "TEMPLATE",
       text: `${plan.title}${plan.courses?.name ? ` — ${plan.courses.name}` : ""}`,
-      dates: `${date}T${startHour}00/${date}T${endTime}00`,
-      details: details || "Lesson plan created via Dice Arts Academy System",
-      location: "Dice Arts Academy",
-      add: "dicearts.academy@gmail.com",
+      dates: `${date}T${startHHMM}00/${date}T${endHHMM}00`,
+      details: summary || `Lesson plan for ${academyName}`,
+      location: academyName,
+      add: academyEmail,
     });
-
     window.open(`https://calendar.google.com/calendar/render?${params}`, "_blank");
   }
 
   return (
-    <button onClick={syncToCalendar} title="Add to Google Calendar (dicearts.academy@gmail.com)"
+    <button onClick={syncToCalendar} title={`Schedule on Google Calendar — ${academyEmail}`}
       className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20">
       <Calendar className="size-3"/>Calendar
     </button>
@@ -171,17 +200,19 @@ function WhatsAppSharePlan({ plan }: { plan: any }) {
 }
 
 function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({
     title: initial?.title ?? "",
     course_id: initial?.course_id ?? "",
     instructor_id: initial?.instructor_id ?? "",
     lesson_date: initial?.lesson_date ?? new Date().toISOString().slice(0, 10),
+    lesson_time: initial?.lesson_time ?? "09:00",
     duration_minutes: initial?.duration_minutes ?? 60,
     objectives: initial?.objectives ?? "",
     materials: initial?.materials ?? "",
     activities: initial?.activities ?? "",
     homework: initial?.homework ?? "",
+    notes: initial?.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -233,6 +264,12 @@ Make it practical, engaging and age-appropriate.`;
       const clean = text.replace(/```json|```/g, "").trim();
       const plan = JSON.parse(clean);
 
+      // Build a compact notes summary from the AI content
+      const autoNotes = [
+        plan.objectives ? `Objectives: ${plan.objectives.slice(0,120).replace(/•\s*/g,"").trim()}` : "",
+        plan.activities ? `Activities: ${plan.activities.slice(0,120).trim()}` : "",
+      ].filter(Boolean).join(" | ");
+
       setForm(f => ({
         ...f,
         title:      plan.title      || f.title,
@@ -240,6 +277,7 @@ Make it practical, engaging and age-appropriate.`;
         materials:  plan.materials  || f.materials,
         activities: plan.activities || f.activities,
         homework:   plan.homework   || f.homework,
+        notes:      autoNotes       || f.notes,
       }));
 
       setAiOpen(false); // collapse AI panel, show filled form
@@ -249,22 +287,24 @@ Make it practical, engaging and age-appropriate.`;
     } finally { setAiGenerating(false); }
   }
 
+  const formBranch = (user?.role === "super_admin" ? activeBranch : user?.branch_id) ?? "";
   const { data: courses } = useQuery({
-    queryKey: ["courses-list"],
-    queryFn: async () => (await supabase.from("courses").select("id,name").eq("status","active").order("name")).data ?? [],
+    queryKey: ["courses-list", formBranch],
+    queryFn: async () => (await supabase.from("courses").select("id,name").eq("status","active").eq("branch_id", formBranch).order("name")).data ?? [],
   });
   const { data: instructors } = useQuery({
-    queryKey: ["instructors-active"],
-    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").order("first_name")).data ?? [],
+    queryKey: ["instructors-active", formBranch],
+    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", formBranch).order("first_name")).data ?? [],
   });
 
   async function save() {
     if (!form.title || !form.lesson_date) { toast.error("Title and date required"); return; }
     setSaving(true);
     try {
-      const payload = { ...form, branch_id: user?.branch_id ?? "",
+      const payload = { ...form, branch_id: (user?.role === "super_admin" ? activeBranch : user?.branch_id) ?? "",
         duration_minutes: Number(form.duration_minutes),
-        course_id: form.course_id || null, instructor_id: form.instructor_id || null };
+        course_id: form.course_id || null, instructor_id: form.instructor_id || null,
+        lesson_time: form.lesson_time || null };
       if (initial) {
         const { error } = await supabase.from("lesson_plans").update(payload).eq("id", initial.id);
         if (error) throw error;

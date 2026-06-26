@@ -41,12 +41,13 @@ function CoursesPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["courses-list", user?.branch_id, user?.role],
+    queryKey: ["courses-list", user?.role === "super_admin" ? activeBranch : user?.branch_id, user?.role],
     queryFn: async () => {
       let q = supabase.from("courses")
         .select("*,instructors(first_name,last_name),course_enrollments(id)")
         .order("name");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      if (branch) q = q.eq("branch_id", branch);
       return (await q).data ?? [];
     },
   });
@@ -214,7 +215,8 @@ function CourseForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     queryKey: ["instructors-active", user?.branch_id],
     queryFn: async () => {
       let q = supabase.from("instructors").select("id,first_name,last_name").eq("status","active").order("first_name");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      if (branch) q = q.eq("branch_id", branch);
       return (await q).data ?? [];
     },
   });
@@ -234,7 +236,7 @@ function CourseForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
         term_fee: form.term_fee ? Number(form.term_fee) : null,
         session_fee: form.per_session_billing ? (Number(form.session_fee) || null) : null,
         instructor_id: form.instructor_id || null,
-        branch_id: user?.branch_id ?? "",
+        branch_id: (user?.role === "super_admin" ? activeBranch : user?.branch_id) ?? "",
         start_date: form.start_date || null,
         end_date: form.end_date || null,
       };

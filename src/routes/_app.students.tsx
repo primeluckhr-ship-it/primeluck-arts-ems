@@ -5,7 +5,7 @@ import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES, getStatusColor } from "@/lib/pla";
-import { Plus, Search, Pencil, UserMinus, UserCheck, GraduationCap } from "lucide-react";
+import { Plus, Search, Pencil, UserMinus, UserCheck, GraduationCap, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/students")({ component: StudentsPage });
@@ -91,6 +91,17 @@ function StudentsPage() {
   const addBranch = isSuper
     ? (branchSegment === "all" ? (activeBranch ?? "branch-1") : branchSegment)
     : (user?.branch_id ?? "branch-1");
+
+  async function deleteStudent(s: any) {
+    if (!confirm(`Permanently delete ${s.first_name} ${s.last_name}? This cannot be undone and will remove all records.`)) return;
+    await supabase.from("attendance_records").delete().eq("student_id", s.id);
+    await supabase.from("course_enrollments").delete().eq("student_id", s.id);
+    await supabase.from("student_accounts").delete().eq("student_id", s.id);
+    await supabase.from("student_parents").delete().eq("student_id", s.id);
+    await supabase.from("students").delete().eq("id", s.id);
+    qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
+    toast.success(`${s.first_name} ${s.last_name} deleted`);
+  }
 
   return (
     <div className="space-y-4">

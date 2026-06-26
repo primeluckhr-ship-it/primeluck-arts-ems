@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus, Pencil, Phone, Mail, BookOpen } from "lucide-react";
+import { Plus, Pencil, Phone, Mail, BookOpen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
 
@@ -19,6 +19,13 @@ function InstructorsPage() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+
+  async function deleteInstructor(inst: any) {
+    if (!confirm(`Delete instructor ${inst.first_name} ${inst.last_name}? Their course assignments will be removed.`)) return;
+    await supabase.from("instructors").delete().eq("id", inst.id);
+    qc.invalidateQueries({ queryKey: ["instructors-list"], exact: false });
+    toast.success(`${inst.first_name} ${inst.last_name} deleted`);
+  }
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -75,9 +82,14 @@ function InstructorsPage() {
                     <Badge className={STATUS_COLORS[inst.status]??""}>{inst.status}</Badge>
                   </div>
                 </div>
-                <button onClick={() => { setEditing(inst); setOpen(true); }} className="p-1.5 rounded hover:bg-muted shrink-0">
-                  <Pencil className="size-4"/>
-                </button>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => { setEditing(inst); setOpen(true); }} className="p-1.5 rounded hover:bg-muted" title="Edit">
+                    <Pencil className="size-4"/>
+                  </button>
+                  <button onClick={() => deleteInstructor(inst)} className="p-1.5 rounded hover:bg-destructive/20 text-destructive" title="Delete instructor">
+                    <Trash2 className="size-4"/>
+                  </button>
+                </div>
               </div>
 
               {/* Specializations */}

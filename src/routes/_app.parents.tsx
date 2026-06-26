@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus, Pencil, MessageCircle, Search } from "lucide-react";
+import { Plus, Pencil, MessageCircle, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
 
@@ -14,6 +14,14 @@ function ParentsPage() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+
+  async function deleteParent(p: any) {
+    if (!confirm(`Delete ${p.first_name} ${p.last_name}? This will remove them and their student links.`)) return;
+    await supabase.from("student_parents").delete().eq("parent_id", p.id);
+    await supabase.from("parents").delete().eq("id", p.id);
+    qc.invalidateQueries({ queryKey: ["parents-list"], exact: false });
+    toast.success(`${p.first_name} ${p.last_name} deleted`);
+  }
   const [search, setSearch] = useState("");
   const qc = useQueryClient();
 
@@ -90,8 +98,11 @@ function ParentsPage() {
                           className="p-1.5 rounded hover:bg-[#25D366]/10 text-[#25D366]">
                           <MessageCircle className="size-4"/>
                         </button>
-                        <button onClick={()=>{ setEditing(p); setOpen(true); }} className="p-1.5 rounded hover:bg-muted">
+                        <button onClick={()=>{ setEditing(p); setOpen(true); }} className="p-1.5 rounded hover:bg-muted" title="Edit">
                           <Pencil className="size-4"/>
+                        </button>
+                        <button onClick={() => deleteParent(p)} className="p-1.5 rounded hover:bg-destructive/20 text-destructive" title="Delete parent">
+                          <Trash2 className="size-4"/>
                         </button>
                       </div>
                     </td>
