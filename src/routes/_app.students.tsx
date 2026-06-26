@@ -105,6 +105,7 @@ function StudentsPage() {
       await supabase.from("course_enrollments").delete().eq("student_id", s.id);
       await supabase.from("student_accounts").delete().eq("student_id", s.id);
       await supabase.from("student_parents").delete().eq("student_id", s.id);
+      await supabase.from("users").update({ linked_entity_id: null }).eq("linked_entity_id", s.id);
       const { error } = await supabase.from("students").delete().eq("id", s.id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
