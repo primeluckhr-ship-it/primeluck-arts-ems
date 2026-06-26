@@ -387,34 +387,6 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
           <TA label="Activities" field="activities"/>
           <TA label="Homework / Follow-up" field="homework"/>
         </div>
-        {/* Photo upload */}
-        <div className="sm:col-span-2">
-          <label className="text-xs font-medium text-muted-foreground block mb-2">Work photos (optional, max 6)</label>
-          <div className="grid grid-cols-3 gap-2">
-            {photos.map((p, i) => (
-              <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-border">
-                <img src={p.preview} alt="" className="w-full h-full object-cover"/>
-                <button type="button" onClick={() => removePhoto(i)}
-                  className="absolute top-1 right-1 size-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black">✕</button>
-              </div>
-            ))}
-            {photos.length < 6 && (
-              <label className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-accent cursor-pointer flex flex-col items-center justify-center text-muted-foreground hover:text-accent transition-colors">
-                <span className="text-2xl">+</span>
-                <span className="text-xs mt-1">Add photo</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)}/>
-              </label>
-            )}
-          </div>
-          {uploadProgress > 0 && uploadProgress < 100 && (
-            <div className="mt-2">
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-1.5 bg-accent rounded-full transition-all" style={{ width: `${uploadProgress}%` }}/>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">Uploading photos… {uploadProgress}%</p>
-            </div>
-          )}
-        </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
           <button onClick={save} disabled={saving}
