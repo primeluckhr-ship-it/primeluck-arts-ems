@@ -20,6 +20,7 @@ const STATUS_CONFIG = {
 
 function AttendancePage() {
   const { user, activeBranch } = useAuth();
+  const qc = useQueryClient();
   const [selectedSession, setSelectedSession] = useState<any>(null);
   const today = format(new Date(), "yyyy-MM-dd");
 
