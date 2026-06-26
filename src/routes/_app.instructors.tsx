@@ -21,10 +21,20 @@ function InstructorsPage() {
   const [editing, setEditing] = useState<any>(null);
 
   async function deleteInstructor(inst: any) {
-    if (!confirm(`Delete instructor ${inst.first_name} ${inst.last_name}? Their course assignments will be removed.`)) return;
-    await supabase.from("instructors").delete().eq("id", inst.id);
-    qc.invalidateQueries({ queryKey: ["instructors-list"], exact: false });
-    toast.success(`${inst.first_name} ${inst.last_name} deleted`);
+    if (!confirm(`Delete instructor ${inst.first_name} ${inst.last_name}? Their course assignments will be cleared.`)) return;
+    try {
+      // Clear FK references on courses first to avoid constraint violation
+      await supabase.from("courses").update({ instructor_id: null }).eq("instructor_id", inst.id);
+      // Also clear from lesson_plans
+      await supabase.from("lesson_plans").update({ instructor_id: null }).eq("instructor_id", inst.id);
+      const { error } = await supabase.from("instructors").delete().eq("id", inst.id);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["instructors-list"], exact: false });
+      qc.invalidateQueries({ queryKey: ["courses-list"], exact: false });
+      toast.success(`${inst.first_name} ${inst.last_name} deleted`);
+    } catch (e: any) {
+      toast.error("Delete failed: " + e.message);
+    }
   }
   const qc = useQueryClient();
 

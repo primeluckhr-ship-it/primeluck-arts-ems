@@ -91,7 +91,7 @@ function LessonPlansTab() {
                 <div>
                   <div className="font-semibold text-sm">{plan.title}</div>
                   <div className="text-xs text-muted-foreground">
-                    {plan.courses?.name} · {plan.lesson_date} · {plan.duration_minutes}min
+                    {plan.courses?.name} · {plan.lesson_date}{plan.lesson_time ? " · " + plan.lesson_time.slice(0,5) : ""} · {plan.duration_minutes}min
                   </div>
                 </div>
               </div>
@@ -154,7 +154,8 @@ function GoogleCalendarSync({ plan }: { plan: any }) {
     const date = plan.lesson_date.replace(/-/g, "");
     const durationMins = Number(plan.duration_minutes ?? 60);
     // Use lesson_time if stored, else default 9am
-    const startHHMM = plan.lesson_time ? plan.lesson_time.replace(":","") : "0900";
+    // lesson_time from DB is "HH:MM:SS" — take first 5 chars "HH:MM" then strip colon
+    const startHHMM = plan.lesson_time ? plan.lesson_time.slice(0,5).replace(":","") : "0900";
     const [startH, startM] = [parseInt(startHHMM.slice(0,2)), parseInt(startHHMM.slice(2,4))];
     const totalM = startH * 60 + startM + durationMins;
     const endHHMM = `${String(Math.floor(totalM/60)).padStart(2,"0")}${String(totalM%60).padStart(2,"0")}`;
