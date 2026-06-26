@@ -1,16 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard } from "@/components/app-shell";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { format, startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/timetable")({ component: TimetablePage });
 
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7am–6pm
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 7);
 const COLORS = [
   "bg-blue-500/20 border-blue-500/40 text-blue-300",
   "bg-purple-500/20 border-purple-500/40 text-purple-300",
@@ -18,72 +19,148 @@ const COLORS = [
   "bg-orange-500/20 border-orange-500/40 text-orange-300",
   "bg-pink-500/20 border-pink-500/40 text-pink-300",
   "bg-yellow-500/20 border-yellow-500/40 text-yellow-300",
-  "bg-cyan-500/20 border-cyan-500/40 text-cyan-300",
 ];
 
-function TimetablePage() {
-  const { user } = useAuth();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const weekEnd = addDays(weekStart, 6);
+function AddSessionModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+  const [form, setForm] = useState({
+    course_id: "",
+    session_date: format(new Date(), "yyyy-MM-dd"),
+    start_time: "09:00",
+    end_time: "10:00",
+    is_recurring: false,
+  });
+  const [saving, setSaving] = useState(false);
 
   const { data: courses } = useQuery({
-    queryKey: ["timetable-courses", user?.branch_id],
-    queryFn: async () => {
-      let q = supabase.from("courses")
-        .select("id,name,start_time,end_time,schedule_days,room,instructors(first_name,last_name)")
-        .eq("status","active");
-      if (user?.role === "dice_admin") q = q.eq("branch_id", user.branch_id);
-      return (await q).data ?? [];
-    },
+    queryKey: ["courses-for-session", branch],
+    queryFn: async () =>
+      (await supabase.from("courses").select("id,name").eq("branch_id", branch).eq("status", "active").order("name")).data ?? [],
   });
 
+  async function save() {
+    if (!form.course_id) { toast.error("Please select a course"); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("sessions").insert({
+        course_id: form.course_id,
+        session_date: form.session_date,
+        start_time: form.start_time,
+        end_time: form.end_time || null,
+        is_recurring: form.is_recurring,
+      });
+      if (error) throw error;
+      toast.success("Session added");
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error("Failed: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Add Session</h2>
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted"><X className="size-4"/></button>
+        </div>
+
+        {/* Course */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Course *</label>
+          <select value={form.course_id} onChange={e => setForm({...form, course_id: e.target.value})}
+            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+            <option value="">— Select course —</option>
+            {(courses ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        {/* Date */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Date *</label>
+          <input type="date" value={form.session_date} onChange={e => setForm({...form, session_date: e.target.value})}
+            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+        </div>
+
+        {/* Times */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Start time</label>
+            <input type="time" value={form.start_time} onChange={e => setForm({...form, start_time: e.target.value})}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">End time</label>
+            <input type="time" value={form.end_time} onChange={e => setForm({...form, end_time: e.target.value})}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+          </div>
+        </div>
+
+        {/* Recurring */}
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={form.is_recurring} onChange={e => setForm({...form, is_recurring: e.target.checked})}
+            className="size-4 accent-accent"/>
+          Recurring weekly session
+        </label>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted">Cancel</button>
+          <button onClick={save} disabled={saving}
+            className="flex-1 px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 disabled:opacity-50">
+            {saving ? "Saving…" : "Add Session"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimetablePage() {
+  const { user, activeBranch } = useAuth();
+  const qc = useQueryClient();
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [showAdd, setShowAdd] = useState(false);
+  const weekEnd = addDays(weekStart, 6);
+  const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
+
   const { data: sessions } = useQuery({
-    queryKey: ["timetable-sessions", format(weekStart,"yyyy-MM-dd"), user?.branch_id],
+    queryKey: ["timetable-sessions", format(weekStart,"yyyy-MM-dd"), user?.branch_id, activeBranch],
     queryFn: async () => {
       const from = format(weekStart,"yyyy-MM-dd");
       const to   = format(weekEnd,"yyyy-MM-dd");
+      const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       const { data } = await supabase.from("sessions")
-        .select("*,courses(name,room,instructors(first_name,last_name))")
-        .gte("date", from).lte("date", to);
-      return data ?? [];
+        .select("*,courses(name,branch_id)")
+        .gte("session_date", from)
+        .lte("session_date", to)
+        .eq("courses.branch_id", branch)
+        .order("start_time");
+      return (data ?? []).filter((s: any) => s.courses !== null);
     },
   });
-
-  // Build color map per course
-  const courseColors: Record<string,string> = {};
-  (courses??[]).forEach((c:any, i:number) => { courseColors[c.id] = COLORS[i % COLORS.length]; });
 
   // Map sessions by day
   const sessionsByDay: Record<string, any[]> = {};
   DAYS.forEach(d => { sessionsByDay[d] = []; });
   (sessions??[]).forEach((s:any) => {
-    const date = new Date(s.date + "T00:00:00");
-    const dayIdx = date.getDay(); // 0=Sun
-    const dayName = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dayIdx];
+    const dayName = format(new Date(s.session_date + "T00:00:00"), "EEE");
     if (sessionsByDay[dayName]) sessionsByDay[dayName].push(s);
   });
 
-  // Also map recurring courses by schedule_days
-  const coursesByDay: Record<string, any[]> = {};
-  DAYS.forEach(d => { coursesByDay[d] = []; });
-  (courses??[]).forEach((c:any) => {
-    (c.schedule_days??[]).forEach((d:string) => {
-      if (coursesByDay[d]) coursesByDay[d].push(c);
-    });
-  });
-
-  function timeToRow(time: string): number {
-    const [h, m] = time.split(":").map(Number);
-    return (h - 7) * 4 + Math.floor(m / 15); // 15-min slots from 7am
-  }
-  function duration(start: string, end: string): number {
-    const s = timeToRow(start), e = timeToRow(end);
-    return Math.max(1, e - s);
-  }
-
   return (
     <div className="space-y-4">
-      {/* Week nav */}
+      {showAdd && (
+        <AddSessionModal
+          onClose={() => setShowAdd(false)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["timetable-sessions"], exact: false })}
+        />
+      )}
+
+      {/* Week nav + Add button */}
       <div className="flex items-center justify-between">
         <button onClick={() => setWeekStart(w => subWeeks(w,1))} className="p-2 rounded-md hover:bg-muted border border-border">
           <ChevronLeft className="size-4"/>
@@ -92,103 +169,87 @@ function TimetablePage() {
           <div className="font-semibold">{format(weekStart,"d MMM")} – {format(weekEnd,"d MMM yyyy")}</div>
           <div className="text-xs text-muted-foreground">Week {format(weekStart,"w")}</div>
         </div>
-        <button onClick={() => setWeekStart(w => addWeeks(w,1))} className="p-2 rounded-md hover:bg-muted border border-border">
-          <ChevronRight className="size-4"/>
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90">
+              <Plus className="size-4"/> Add Session
+            </button>
+          )}
+          <button onClick={() => setWeekStart(w => addWeeks(w,1))} className="p-2 rounded-md hover:bg-muted border border-border">
+            <ChevronRight className="size-4"/>
+          </button>
+        </div>
       </div>
 
       {/* Mobile: Day cards */}
-      <div className="block lg:hidden space-y-3">
+      <div className="sm:hidden space-y-3">
         {DAYS.map((day, di) => {
           const date = addDays(weekStart, di);
+          const daySessions = sessionsByDay[day] ?? [];
           const isToday = format(date,"yyyy-MM-dd") === format(new Date(),"yyyy-MM-dd");
-          const items = [...(coursesByDay[day]??[]).map((c:any) => ({
-            id: c.id, name: c.name, start: c.start_time?.slice(0,5), end: c.end_time?.slice(0,5),
-            room: c.room, instructor: c.instructors ? `${c.instructors.first_name} ${c.instructors.last_name}` : "", isCourse: true,
-          })), ...(sessionsByDay[day]??[]).filter((s:any) => !s.is_recurring).map((s:any) => ({
-            id: s.course_id, name: s.courses?.name, start: s.start_time?.slice(0,5), end: s.end_time?.slice(0,5),
-            room: s.courses?.room, instructor: s.courses?.instructors ? `${s.courses.instructors.first_name} ${s.courses.instructors.last_name}` : "", isCourse: false,
-          }))].sort((a,b) => (a.start||"").localeCompare(b.start||""));
-
           return (
-            <div key={day} className={`rounded-xl border p-4 ${isToday ? "border-accent bg-accent/5" : "border-border bg-card"}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="font-semibold text-sm">{day}</div>
-                <div className={`text-xs ${isToday ? "text-accent font-medium" : "text-muted-foreground"}`}>{format(date,"d MMM")}</div>
+            <div key={day} className={`rounded-xl border p-3 ${isToday ? "border-accent/40 bg-accent/5" : "border-border bg-card"}`}>
+              <div className={`text-sm font-semibold mb-2 ${isToday ? "text-accent" : ""}`}>
+                {day} <span className="font-normal text-muted-foreground text-xs">{format(date,"d MMM")}</span>
               </div>
-              {items.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No classes</p>
-              ) : (
-                <div className="space-y-2">
-                  {items.map((item, i) => (
-                    <div key={i} className={`rounded-lg border p-2.5 text-xs ${courseColors[item.id]??COLORS[0]}`}>
-                      <div className="font-semibold">{item.name}</div>
-                      <div className="mt-0.5 flex items-center gap-2 opacity-80">
-                        <span>{item.start} – {item.end}</span>
-                        {item.room && <span>· {item.room}</span>}
-                      </div>
-                      {item.instructor && <div className="opacity-70 mt-0.5">{item.instructor}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
+              {daySessions.length === 0
+                ? <p className="text-xs text-muted-foreground">No sessions</p>
+                : daySessions.map((s: any, i: number) => (
+                  <div key={s.id} className={`rounded-lg border px-2 py-1.5 mb-1 text-xs ${COLORS[i % COLORS.length]}`}>
+                    <div className="font-medium">{s.courses?.name}</div>
+                    <div className="opacity-70">{s.start_time?.slice(0,5)}{s.end_time ? ` – ${s.end_time.slice(0,5)}` : ""}</div>
+                  </div>
+                ))
+              }
             </div>
           );
         })}
       </div>
 
       {/* Desktop: Grid */}
-      <div className="hidden lg:block overflow-x-auto rounded-xl border border-border bg-card">
-        <div className="grid min-w-[900px]" style={{ gridTemplateColumns: "60px repeat(7, 1fr)" }}>
-          {/* Header */}
-          <div className="border-b border-r border-border p-2 bg-muted/30"/>
-          {DAYS.map((day, di) => {
-            const date = addDays(weekStart, di);
-            const isToday = format(date,"yyyy-MM-dd") === format(new Date(),"yyyy-MM-dd");
-            return (
-              <div key={day} className={`border-b border-r border-border p-3 text-center ${isToday ? "bg-accent/10" : "bg-muted/20"}`}>
-                <div className={`text-sm font-semibold ${isToday ? "text-accent" : ""}`}>{day}</div>
-                <div className={`text-xs ${isToday ? "text-accent" : "text-muted-foreground"}`}>{format(date,"d MMM")}</div>
-              </div>
-            );
-          })}
+      <div className="hidden sm:block overflow-x-auto">
+        <div className="min-w-[640px]">
+          {/* Header row */}
+          <div className="grid grid-cols-8 gap-px bg-border rounded-t-xl overflow-hidden">
+            <div className="bg-card px-2 py-2 text-xs text-muted-foreground"></div>
+            {DAYS.map((day, di) => {
+              const date = addDays(weekStart, di);
+              const isToday = format(date,"yyyy-MM-dd") === format(new Date(),"yyyy-MM-dd");
+              return (
+                <div key={day} className={`px-2 py-2 text-center ${isToday ? "bg-accent/10" : "bg-card"}`}>
+                  <div className={`text-xs font-semibold ${isToday ? "text-accent" : ""}`}>{day}</div>
+                  <div className={`text-xs ${isToday ? "text-accent" : "text-muted-foreground"}`}>{format(date,"d MMM")}</div>
+                </div>
+              );
+            })}
+          </div>
           {/* Time rows */}
-          {HOURS.map((hour) => (
-            <>
-              <div key={`t${hour}`} className="border-b border-r border-border p-2 text-[10px] text-muted-foreground text-right pr-2 pt-1.5">{hour}:00</div>
+          {HOURS.map(hour => (
+            <div key={hour} className="grid grid-cols-8 gap-px bg-border">
+              <div className="bg-card px-2 py-1 text-[10px] text-muted-foreground text-right">{hour}:00</div>
               {DAYS.map((day, di) => {
-                const items = (coursesByDay[day]??[]).filter((c:any) => {
-                  const h = parseInt(c.start_time?.split(":")?.[0]??"-1");
+                const date = addDays(weekStart, di);
+                const isToday = format(date,"yyyy-MM-dd") === format(new Date(),"yyyy-MM-dd");
+                const slot = (sessionsByDay[day] ?? []).filter((s: any) => {
+                  const h = parseInt(s.start_time?.slice(0,2) ?? "0");
                   return h === hour;
                 });
                 return (
-                  <div key={`${day}${hour}`} className="border-b border-r border-border min-h-[48px] p-0.5 relative">
-                    {items.map((c:any, i:number) => (
-                      <div key={i} className={`rounded px-1.5 py-1 text-[10px] border mb-0.5 ${courseColors[c.id]??COLORS[0]}`}>
-                        <div className="font-semibold truncate">{c.name}</div>
-                        <div className="opacity-70">{c.start_time?.slice(0,5)}–{c.end_time?.slice(0,5)}</div>
-                        {c.room && <div className="opacity-60">{c.room}</div>}
+                  <div key={day} className={`bg-card min-h-[40px] px-1 py-0.5 ${isToday ? "bg-accent/5" : ""}`}>
+                    {slot.map((s: any, i: number) => (
+                      <div key={s.id} className={`rounded px-1.5 py-1 text-[10px] border mb-0.5 ${COLORS[i % COLORS.length]}`}>
+                        <div className="font-medium truncate">{s.courses?.name}</div>
+                        <div className="opacity-70">{s.start_time?.slice(0,5)}</div>
                       </div>
                     ))}
                   </div>
                 );
               })}
-            </>
-          ))}
-        </div>
-      </div>
-
-      {/* Legend */}
-      {(courses??[]).length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {(courses??[]).map((c:any, i:number) => (
-            <div key={c.id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs ${COLORS[i%COLORS.length]}`}>
-              <div className="size-2 rounded-full bg-current"/>
-              {c.name}
             </div>
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }
