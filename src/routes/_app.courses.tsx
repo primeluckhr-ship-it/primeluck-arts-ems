@@ -220,7 +220,10 @@ function CourseForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     end_time: initial?.end_time ?? "",
     start_date: initial?.start_date ?? "",
     end_date: initial?.end_date ?? "",
-    schedule_days: initial?.schedule_days ?? [] as string[],
+    schedule_days: (initial?.schedule_days ?? []).map((d: string) => {
+      const map: Record<string,string> = { Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun" };
+      return map[d] ?? d;
+    }) as string[],
     status: initial?.status ?? "active",
     billing_cycle: initial?.billing_cycle ?? "monthly",
     monthly_fee: initial?.monthly_fee ?? "",
