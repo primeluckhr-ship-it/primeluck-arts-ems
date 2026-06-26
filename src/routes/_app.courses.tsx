@@ -22,6 +22,8 @@ function CoursesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
 
+  const qc = useQueryClient();
+
   async function deleteCourse(course: any) {
     // Check enrollments first
     const { count } = await supabase.from("course_enrollments")
@@ -33,12 +35,30 @@ function CoursesPage() {
     } else {
       if (!confirm(`Delete course "${course.name}"? This cannot be undone.`)) return;
     }
-    await supabase.from("course_enrollments").delete().eq("course_id", course.id);
-    await supabase.from("courses").delete().eq("id", course.id);
-    qc.invalidateQueries({ queryKey: ["courses"] });
-    toast.success(`"${course.name}" deleted`);
+    try {
+      // Clear / delete all FK references before deleting course
+      await supabase.from("attendance_charges").delete().eq("course_id", course.id);
+      await supabase.from("course_enrollments").delete().eq("course_id", course.id);
+      await supabase.from("student_progress_reports").delete().eq("course_id", course.id);
+      // Get sessions for this course so we can delete their attendance records too
+      const { data: courseSessions } = await supabase.from("sessions").select("id").eq("course_id", course.id);
+      if (courseSessions?.length) {
+        const sessionIds = courseSessions.map((s: any) => s.id);
+        await supabase.from("attendance_records").delete().in("session_id", sessionIds);
+        await supabase.from("lesson_plans").update({ session_id: null }).in("session_id", sessionIds);
+      }
+      await supabase.from("sessions").delete().eq("course_id", course.id);
+      await supabase.from("lesson_plans").update({ course_id: null }).eq("course_id", course.id);
+      await supabase.from("projects").update({ course_id: null }).eq("course_id", course.id);
+      await supabase.from("institutions").update({ course_id: null }).eq("course_id", course.id);
+      const { error } = await supabase.from("courses").delete().eq("id", course.id);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["courses"] });
+      toast.success(`"${course.name}" deleted`);
+    } catch (err: any) {
+      toast.error("Could not delete course: " + err.message);
+    }
   }
-  const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["courses-list", user?.role === "super_admin" ? activeBranch : user?.branch_id, user?.role],
