@@ -85,6 +85,23 @@ function PortfolioPage() {
 
   const studentMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, s]));
 
+  function copyLink(url: string, msg: string) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => toast.success(msg)).catch(() => fallbackCopy(url, msg));
+    } else {
+      fallbackCopy(url, msg);
+    }
+  }
+  function fallbackCopy(url: string, msg: string) {
+    const el = document.createElement("textarea");
+    el.value = url;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    toast.success(msg);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -112,9 +129,8 @@ function PortfolioPage() {
         <div className="ml-auto flex items-center gap-2">
           {isAdmin && (
             <button onClick={() => {
-              const url = `${window.location.origin}/portfolio/gallery/${user?.role === "super_admin" ? activeBranch : user?.branch_id}`;
-              navigator.clipboard.writeText(url);
-              toast.success("Gallery link copied! Share it with parents.");
+              const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id;
+              copyLink(`${window.location.origin}/portfolio/gallery/${branch}`, "Gallery link copied! Share it with parents.");
             }} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
               <Link2 className="size-4"/>Copy Gallery Link
             </button>
@@ -151,6 +167,12 @@ function PortfolioPage() {
             <div className="flex items-center gap-2">
               <div className="h-px flex-1 bg-border"/>
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{stuName}</span>
+              {isAdmin && sid !== "unknown" && (
+                <button onClick={() => copyLink(`${window.location.origin}/portfolio/student/${sid}`, `${stuName.split(" ")[0]}'s portfolio link copied!`)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors whitespace-nowrap">
+                  <Link2 className="size-3"/>Copy link
+                </button>
+              )}
               <div className="h-px flex-1 bg-border"/>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
