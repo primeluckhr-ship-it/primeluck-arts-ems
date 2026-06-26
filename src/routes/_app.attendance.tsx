@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES } from "@/lib/pla";
-import { CalendarCheck, CheckCircle2, XCircle, Clock, MinusCircle } from "lucide-react";
+import { CalendarCheck, CheckCircle2, XCircle, Clock, MinusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -46,6 +46,17 @@ function AttendancePage() {
     },
   });
 
+  const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
+
+  async function deleteSession(session: any, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete "${session.courses?.name}" session on ${session.session_date}? All attendance records for this session will also be removed.`)) return;
+    await supabase.from("attendance_records").delete().eq("session_id", session.id);
+    await supabase.from("sessions").delete().eq("id", session.id);
+    qc.invalidateQueries({ queryKey: ["sessions-today"], exact: false });
+    toast.success("Session deleted");
+  }
+
   if (selectedSession) {
     return <AttendanceSheet session={selectedSession} onBack={() => setSelectedSession(null)} />;
   }
@@ -58,14 +69,14 @@ function AttendancePage() {
       {todaySessions.length > 0 && (
         <PageCard title="Today's Sessions" subtitle={format(new Date(),"EEEE, d MMMM yyyy")}>
           <div className="space-y-2">
-            {todaySessions.map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)}/>)}
+            {todaySessions.map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)} isAdmin={isAdmin} onDelete={(e) => deleteSession(s, e)}/>)}
           </div>
         </PageCard>
       )}
       <PageCard title={todaySessions.length?"Recent Sessions":"All Sessions"}>
         {isLoading && <p className="py-6 text-center text-muted-foreground">Loading…</p>}
         <div className="space-y-2">
-          {otherSessions.slice(0,20).map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)}/>)}
+          {otherSessions.slice(0,20).map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)} isAdmin={isAdmin} onDelete={(e) => deleteSession(s, e)}/>)}
           {!isLoading && !sessions?.length && <p className="py-8 text-center text-muted-foreground">No sessions found</p>}
         </div>
       </PageCard>
@@ -73,19 +84,26 @@ function AttendancePage() {
   );
 }
 
-function SessionRow({ session, onClick }:{ session:any; onClick:()=>void }) {
+function SessionRow({ session, onClick, isAdmin, onDelete }:{ session:any; onClick:()=>void; isAdmin?: boolean; onDelete?: (e: React.MouseEvent) => void }) {
   const cfg = STATUS_CONFIG[session.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.present;
   return (
-    <button onClick={onClick} className="w-full flex items-center justify-between gap-3 rounded-lg border border-border p-3 hover:bg-muted/40 text-left transition-colors">
-      <div className="flex items-center gap-3">
-        <CalendarCheck className="size-5 text-accent shrink-0"/>
-        <div>
-          <div className="font-medium text-sm">{session.courses?.name ?? "Session"}</div>
-          <div className="text-xs text-muted-foreground">{session.session_date} · {session.start_time?.slice(0,5)} – {session.end_time?.slice(0,5)}</div>
+    <div className="flex items-center gap-2 rounded-lg border border-border hover:bg-muted/40 transition-colors">
+      <button onClick={onClick} className="flex-1 flex items-center justify-between gap-3 p-3 text-left">
+        <div className="flex items-center gap-3">
+          <CalendarCheck className="size-5 text-accent shrink-0"/>
+          <div>
+            <div className="font-medium text-sm">{session.courses?.name ?? "Session"}</div>
+            <div className="text-xs text-muted-foreground">{session.session_date} · {session.start_time?.slice(0,5)} – {session.end_time?.slice(0,5)}</div>
+          </div>
         </div>
-      </div>
-      <Badge className={cfg.cls}>{session.status}</Badge>
-    </button>
+        <Badge className={cfg.cls}>{session.status}</Badge>
+      </button>
+      {isAdmin && onDelete && (
+        <button onClick={onDelete} className="p-2 mr-2 rounded hover:bg-destructive/20 text-destructive shrink-0" title="Delete session">
+          <Trash2 className="size-4"/>
+        </button>
+      )}
+    </div>
   );
 }
 
