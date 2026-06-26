@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_app/")({
 });
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   if (!user) return null;
   switch (user.role) {
     case "super_admin": return <AdminDash />;
@@ -27,9 +27,9 @@ function Dashboard() {
 }
 
 function AdminDash() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const isSuper = user?.role === "super_admin";
-  const branch = user?.branch_id ?? "";
+  const branch = (isSuper ? activeBranch : user?.branch_id) ?? "";
 
   // Apply branch filter for non-super-admin users
   function br<T extends object>(q: T): T {
@@ -229,7 +229,7 @@ function RecentPaymentsCard() {
 }
 
 function TeacherDash() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const { data } = useQuery({
     queryKey: ["teacher-today", user?.id],
     queryFn: async () => {
@@ -266,7 +266,7 @@ function TeacherDash() {
 }
 
 function ParentDash() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const { data } = useQuery({
     queryKey: ["parent-children", user?.linked_entity_id],
     queryFn: async () => {
@@ -311,7 +311,7 @@ function ParentDash() {
 }
 
 function StudentDash() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const { data } = useQuery({
     queryKey: ["student-today", user?.linked_entity_id],
     queryFn: async () => {
@@ -352,7 +352,7 @@ function StudentDash() {
    DICE ARTS ADMIN DASHBOARD
    ═══════════════════════════════════════════════ */
 function DiceAdminDash() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const today = format(new Date(), "yyyy-MM-dd");
   const BRANCH = "dice-arts-nairobi";
 

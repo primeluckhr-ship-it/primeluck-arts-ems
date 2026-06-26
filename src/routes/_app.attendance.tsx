@@ -19,7 +19,7 @@ const STATUS_CONFIG = {
 };
 
 function AttendancePage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [selectedSession, setSelectedSession] = useState<any>(null);
   const today = format(new Date(), "yyyy-MM-dd");
 

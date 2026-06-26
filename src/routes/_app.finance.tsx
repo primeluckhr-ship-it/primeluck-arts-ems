@@ -13,7 +13,7 @@ import { Field, Input } from "./_app.students";
 export const Route = createFileRoute("/_app/finance")({ component: FinancePage });
 
 function FinancePage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const isDice = user?.role === "dice_admin";
   const [tab, setTab] = useState<"invoices"|"payments"|"arrears"|"expenditure"|"income">("invoices");
 
@@ -42,7 +42,7 @@ function FinancePage() {
 
 /* ── INVOICES ── */
 function InvoicesTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth()+1);
@@ -149,7 +149,7 @@ function InvoicesTab() {
 
 /* ── TERMLY GENERATOR ── */
 function TermlyGenerator({ onGenerated }:{ onGenerated:()=>void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [termId, setTermId] = useState("");
   const [typeFilter, setTypeFilter] = useState("institution");
   const [generating, setGenerating] = useState(false);
@@ -217,7 +217,7 @@ function TermlyGenerator({ onGenerated }:{ onGenerated:()=>void }) {
 
 /* ── PAYMENTS ── */
 function PaymentsTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
@@ -254,7 +254,7 @@ function PaymentsTab() {
 }
 
 function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [studentId, setStudentId] = useState("");
   const [form, setForm] = useState({ amount:"", payment_method:"MPesa", mpesa_code:"", notes:"", payment_date: new Date().toISOString().slice(0,10) });
   const [saving, setSaving] = useState(false);
@@ -326,7 +326,7 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
 
 /* ── ARREARS ── */
 function ArrearsTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*")).data??[] });
   const { data } = useQuery({
     queryKey:["arrears-list"],
@@ -403,7 +403,7 @@ function ArrearsTab() {
 
 /* ── EXPENDITURE ── */
 function ExpenditureTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const branchId = user?.branch_id ?? "";
@@ -458,7 +458,7 @@ function ExpenditureTab() {
 }
 
 function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({ category:"", description:"", amount:"", expense_date: new Date().toISOString().slice(0,10), payment_method:"cash", receipt_ref:"" });
   const [saving, setSaving] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File|null>(null);
@@ -554,7 +554,7 @@ function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
 
 /* ── INCOME (Dice Arts) ── */
 function IncomeTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const branchId = user?.branch_id ?? "";
@@ -601,7 +601,7 @@ function IncomeTab() {
 }
 
 function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({ category:"school_fees", description:"", amount:"", commission_rate:"", income_date: new Date().toISOString().slice(0,10), payment_method:"bank_transfer", reference:"" });
   const [saving, setSaving] = useState(false);
   async function save() {

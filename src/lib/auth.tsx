@@ -12,31 +12,51 @@ export interface SessionUser {
   linked_entity_id: string | null;
 }
 
+const BRANCHES = [
+  { id: "branch-1",           label: "PrimeLuck Arts", short: "PLA" },
+  { id: "dice-arts-nairobi",  label: "Dice Arts",      short: "DICE" },
+];
+
 interface AuthCtx {
   user: SessionUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<SessionUser>;
   logout: () => void;
+  // Super-admin branch switcher
+  activeBranch: string | null;       // the branch currently being viewed
+  setActiveBranch: (b: string) => void;
+  branches: typeof BRANCHES;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
 const KEY = "pla_session";
+const BRANCH_KEY = "pla_active_branch";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeBranch, setActiveBranchState] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      try {
-        const tmp = raw ? JSON.parse(raw) : null;
-        if (tmp?.branch_id) document.documentElement.setAttribute("data-brand", tmp.branch_id === "dice-arts-nairobi" ? "dice" : "pla");
-      } catch {}
-      if (raw) setUser(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setUser(parsed);
+        const savedBranch = localStorage.getItem(BRANCH_KEY);
+        const initial = (parsed.role === "super_admin" && savedBranch) ? savedBranch : parsed.branch_id;
+        setActiveBranchState(initial);
+        document.documentElement.setAttribute("data-brand", initial === "dice-arts-nairobi" ? "dice" : "pla");
+      }
     } catch {}
     setLoading(false);
   }, []);
+
+  const setActiveBranch = (b: string) => {
+    setActiveBranchState(b);
+    localStorage.setItem(BRANCH_KEY, b);
+    document.documentElement.setAttribute("data-brand", b === "dice-arts-nairobi" ? "dice" : "pla");
+  };
 
   const login = async (email: string, password: string) => {
     const hash = await sha256(password);
@@ -59,18 +79,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       linked_entity_id: data.linked_entity_id,
     };
     localStorage.setItem(KEY, JSON.stringify(su));
-      document.documentElement.setAttribute("data-brand", su.branch_id === "dice-arts-nairobi" ? "dice" : "pla");
+    const initial = su.role === "super_admin" ? (localStorage.getItem(BRANCH_KEY) ?? su.branch_id ?? "branch-1") : su.branch_id ?? "branch-1";
+    setActiveBranchState(initial);
+    document.documentElement.setAttribute("data-brand", initial === "dice-arts-nairobi" ? "dice" : "pla");
     setUser(su);
     return su;
   };
 
   const logout = () => {
     localStorage.removeItem(KEY);
+    localStorage.removeItem(BRANCH_KEY);
     document.documentElement.removeAttribute("data-brand");
     setUser(null);
+    setActiveBranchState(null);
   };
 
-  return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, loading, login, logout, activeBranch, setActiveBranch, branches: BRANCHES }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useAuth() {

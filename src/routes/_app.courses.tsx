@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES, getStatusColor } from "@/lib/pla";
-import { Plus, Pencil, Users, Clock } from "lucide-react";
+import { Plus, Pencil, Users, Clock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
 
@@ -17,10 +17,27 @@ const CATEGORIES = ["Drawing","Painting","Watercolour","Oil Painting","Acrylic",
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 function CoursesPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [view, setView] = useState<"grid"|"schedule">("grid");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+
+  async function deleteCourse(course: any) {
+    // Check enrollments first
+    const { count } = await supabase.from("course_enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("course_id", course.id)
+      .eq("status", "active");
+    if ((count ?? 0) > 0) {
+      if (!confirm(`"${course.name}" has ${count} active student(s) enrolled. Deleting will remove all enrolments. Continue?`)) return;
+    } else {
+      if (!confirm(`Delete course "${course.name}"? This cannot be undone.`)) return;
+    }
+    await supabase.from("course_enrollments").delete().eq("course_id", course.id);
+    await supabase.from("courses").delete().eq("id", course.id);
+    qc.invalidateQueries({ queryKey: ["courses"] });
+    toast.success(`"${course.name}" deleted`);
+  }
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -91,9 +108,14 @@ function CoursesPage() {
                   <div className="flex items-center gap-1 shrink-0">
                     <Badge className={getStatusColor(c.status)}>{c.status}</Badge>
                     {canEdit && (
-                      <button onClick={() => { setEditing(c); setOpen(true); }} className="p-1 rounded hover:bg-muted">
-                        <Pencil className="size-3.5"/>
-                      </button>
+                      <>
+                        <button onClick={() => { setEditing(c); setOpen(true); }} className="p-1 rounded hover:bg-muted" title="Edit">
+                          <Pencil className="size-3.5"/>
+                        </button>
+                        <button onClick={() => deleteCourse(c)} className="p-1 rounded hover:bg-destructive/20 text-destructive" title="Delete course">
+                          <Trash2 className="size-3.5"/>
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -167,7 +189,7 @@ function CoursesPage() {
 }
 
 function CourseForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({
     name: initial?.name ?? "",
     category: initial?.category ?? "General",

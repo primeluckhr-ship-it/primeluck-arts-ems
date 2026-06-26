@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/announcements")({
 });
 
 function AnnouncementsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -86,7 +86,7 @@ function AnnouncementsPage() {
 }
 
 function AnnForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({
     title: initial?.title ?? "",
     content: initial?.content ?? "",

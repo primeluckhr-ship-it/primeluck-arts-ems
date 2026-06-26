@@ -56,7 +56,7 @@ export function Logo({ size = 36, branch }: { size?: number; branch?: string }) 
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, activeBranch, setActiveBranch, branches } = useAuth();
   const nav = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [collapsed, setCollapsed] = useState(false);
@@ -64,7 +64,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (!user) return null;
   const items = NAV.filter((i) => i.roles.includes(user.role));
-  const brandName = user.branch_id === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts";
+  const viewBranch = user.role === "super_admin" ? (activeBranch ?? user.branch_id) : user.branch_id;
+  const brandName = viewBranch === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts";
   const currentTitle = items.find((i) => i.to === pathname)?.label ?? brandName;
 
   const SidebarBody = (
@@ -89,8 +90,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex bg-background text-foreground">
       <aside className={cn("hidden md:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 sticky top-0 h-screen", collapsed ? "w-16" : "w-[260px]")}>
         <div className={cn("flex items-center gap-3 px-4 h-16 border-b border-sidebar-border", collapsed && "justify-center px-2")}>
-          <Logo size={36} branch={user.branch_id ?? ""} />
-          {!collapsed && (<div className="leading-tight"><div className="text-sm font-bold tracking-wide">{user.branch_id === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{user.branch_id === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>)}
+          <Logo size={36} branch={viewBranch ?? ""} />
+          {!collapsed && (<div className="leading-tight"><div className="text-sm font-bold tracking-wide">{viewBranch === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{viewBranch === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>)}
         </div>
         {SidebarBody}
         <div className="p-2 border-t border-sidebar-border">
@@ -104,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <aside className="relative w-72 bg-sidebar border-r border-sidebar-border flex flex-col">
             <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border">
-              <Logo size={36} branch={user.branch_id ?? ""} /><div className="leading-tight"><div className="text-sm font-bold tracking-wide">{user.branch_id === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{user.branch_id === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>
+              <Logo size={36} branch={viewBranch ?? ""} /><div className="leading-tight"><div className="text-sm font-bold tracking-wide">{viewBranch === "dice-arts-nairobi" ? "DICE ARTS" : "PRIME LUCK"}</div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">{viewBranch === "dice-arts-nairobi" ? "Inspiring Creativity" : "Arts Academy"}</div></div>
             </div>
             {SidebarBody}
           </aside>
@@ -115,6 +116,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="md:hidden p-2 rounded hover:bg-muted" onClick={() => setMobileOpen(true)}><Menu className="size-5" /></button>
           <h1 className="text-lg font-semibold truncate flex-1">{currentTitle}</h1>
           <span className="hidden sm:inline-flex items-center rounded-full bg-accent/15 text-accent border border-accent/30 px-3 py-1 text-xs font-semibold">{roleLabel(user.role)}</span>
+          {user.role === "super_admin" && (
+            <div className="hidden sm:flex items-center rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              {branches.map((b) => (
+                <button key={b.id} onClick={() => setActiveBranch(b.id)}
+                  className={`px-3 py-1.5 transition-colors ${activeBranch === b.id ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+                  {b.short}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className="size-9 rounded-full bg-primary flex items-center justify-center font-semibold text-sm">{user.first_name[0]}{user.last_name[0]}</div>
             <div className="hidden sm:block leading-tight"><div className="text-sm font-medium">{user.first_name} {user.last_name}</div><div className="text-xs text-muted-foreground">{user.email}</div></div>

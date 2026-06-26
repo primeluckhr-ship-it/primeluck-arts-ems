@@ -21,7 +21,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function StudentsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -190,7 +190,7 @@ function StudentsPage() {
 }
 
 function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [form, setForm] = useState({
     first_name: initial?.first_name ?? "",
     last_name: initial?.last_name ?? "",
