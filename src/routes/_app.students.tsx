@@ -336,10 +336,15 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
       } else {
         const { error, data: inserted } = await supabase.from("students").insert(payload).select().single();
         if (error) throw error;
-        // Enroll in course if selected
-        if (selectedCourseId && inserted) {
+        // Enroll in course — auto-detect for institution students
+        let enrollCourseId = selectedCourseId;
+        if (form.student_type === "institution" && institutionId) {
+          const { data: instData } = await supabase.from("institutions").select("course_id").eq("id", institutionId).maybeSingle();
+          if (instData?.course_id) enrollCourseId = instData.course_id;
+        }
+        if (enrollCourseId && inserted) {
           await supabase.from("course_enrollments").insert({
-            student_id: inserted.id, course_id: selectedCourseId,
+            student_id: inserted.id, course_id: enrollCourseId,
             status: "active", enrollment_date: form.enrollment_date || new Date().toISOString().slice(0, 10),
           });
         }
@@ -392,15 +397,25 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
         </div>
 
         {/* ── Section 2: Course enrollment ── */}
-        <div className="border-t border-border/50 pt-4 mb-4">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Enroll in Course</p>
-          <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-            <option value="">— No course (enroll later) —</option>
-            {(courses ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <p className="text-xs text-muted-foreground mt-1">Student will appear in this course's attendance sessions</p>
-        </div>
+        {form.student_type === "institution" ? (
+          <div className="border-t border-border/50 pt-4 mb-4 rounded-lg bg-accent/5 border border-accent/20 p-3">
+            <p className="text-xs font-semibold text-accent mb-1">📚 Course Auto-Assigned</p>
+            <p className="text-xs text-muted-foreground">
+              This student will be automatically enrolled in the course linked to their institution.
+              {institutionId && courses?.length === 0 && " (Set up the institution's course in Partner Schools first)"}
+            </p>
+          </div>
+        ) : (
+          <div className="border-t border-border/50 pt-4 mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Enroll in Course</p>
+            <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+              <option value="">— No course (enroll later) —</option>
+              {(courses ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Student will appear in this course's attendance sessions</p>
+          </div>
+        )}
 
         {/* ── Section 3: Personal details ── */}
         <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
