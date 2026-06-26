@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard } from "@/components/app-shell";
-import { Plus, Share2, ImageIcon, Star, Upload, X, ExternalLink } from "lucide-react";
+import { Plus, Share2, ImageIcon, Star, Upload, X, ExternalLink, Link2, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
@@ -109,7 +109,16 @@ function PortfolioPage() {
           </select>
         )}
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {isAdmin && (
+            <button onClick={() => {
+              const url = `${window.location.origin}/portfolio/gallery/${user?.role === "super_admin" ? activeBranch : user?.branch_id}`;
+              navigator.clipboard.writeText(url);
+              toast.success("Gallery link copied! Share it with parents.");
+            }} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+              <Link2 className="size-4"/>Copy Gallery Link
+            </button>
+          )}
           {(isAdmin || isInstructor) && (
             <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-accent text-accent-foreground px-3 py-1.5 text-sm font-medium">
               <Plus className="size-4"/>Add Artwork

@@ -37,6 +37,8 @@ import { Route as AppAssessmentsRouteImport } from './routes/_app.assessments'
 import { Route as AppAnnouncementsRouteImport } from './routes/_app.announcements'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AppStudentsIdRouteImport } from './routes/_app.students.$id'
+import { Route as PortfolioStudentRouteImport } from './routes/portfolio.student.'
+import { Route as PortfolioGalleryRouteImport } from './routes/portfolio.gallery.'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -177,6 +179,16 @@ const AppStudentsIdRoute = AppStudentsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppStudentsRoute,
 } as any)
+const PortfolioStudentRoute = PortfolioStudentRouteImport.update({
+  id: '/portfolio/student/',
+  path: '/portfolio/student/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortfolioGalleryRoute = PortfolioGalleryRouteImport.update({
+  id: '/portfolio/gallery/',
+  path: '/portfolio/gallery/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -205,6 +217,8 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/students': typeof AppStudentsRouteWithChildren
   '/timetable': typeof AppTimetableRoute
+  '/portfolio/gallery/': typeof PortfolioGalleryRoute
+  '/portfolio/student/': typeof PortfolioStudentRoute
   '/students/$id': typeof AppStudentsIdRoute
 }
 export interface FileRoutesByTo {
@@ -234,6 +248,8 @@ export interface FileRoutesByTo {
   '/students': typeof AppStudentsRouteWithChildren
   '/timetable': typeof AppTimetableRoute
   '/': typeof AppIndexRoute
+  '/portfolio/gallery': typeof PortfolioGalleryRoute
+  '/portfolio/student': typeof PortfolioStudentRoute
   '/students/$id': typeof AppStudentsIdRoute
 }
 export interface FileRoutesById {
@@ -265,6 +281,8 @@ export interface FileRoutesById {
   '/_app/students': typeof AppStudentsRouteWithChildren
   '/_app/timetable': typeof AppTimetableRoute
   '/_app/': typeof AppIndexRoute
+  '/portfolio/gallery/': typeof PortfolioGalleryRoute
+  '/portfolio/student/': typeof PortfolioStudentRoute
   '/_app/students/$id': typeof AppStudentsIdRoute
 }
 export interface FileRouteTypes {
@@ -296,6 +314,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/students'
     | '/timetable'
+    | '/portfolio/gallery/'
+    | '/portfolio/student/'
     | '/students/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -325,6 +345,8 @@ export interface FileRouteTypes {
     | '/students'
     | '/timetable'
     | '/'
+    | '/portfolio/gallery'
+    | '/portfolio/student'
     | '/students/$id'
   id:
     | '__root__'
@@ -355,6 +377,8 @@ export interface FileRouteTypes {
     | '/_app/students'
     | '/_app/timetable'
     | '/_app/'
+    | '/portfolio/gallery/'
+    | '/portfolio/student/'
     | '/_app/students/$id'
   fileRoutesById: FileRoutesById
 }
@@ -362,6 +386,8 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   FeedbackRoute: typeof FeedbackRoute
   LoginRoute: typeof LoginRoute
+  PortfolioGalleryRoute: typeof PortfolioGalleryRoute
+  PortfolioStudentRoute: typeof PortfolioStudentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -562,6 +588,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppStudentsIdRouteImport
       parentRoute: typeof AppStudentsRoute
     }
+    '/portfolio/student/': {
+      id: '/portfolio/student/'
+      path: '/portfolio/student'
+      fullPath: '/portfolio/student/'
+      preLoaderRoute: typeof PortfolioStudentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portfolio/gallery/': {
+      id: '/portfolio/gallery/'
+      path: '/portfolio/gallery'
+      fullPath: '/portfolio/gallery/'
+      preLoaderRoute: typeof PortfolioGalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -637,6 +677,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   FeedbackRoute: FeedbackRoute,
   LoginRoute: LoginRoute,
+  PortfolioGalleryRoute: PortfolioGalleryRoute,
+  PortfolioStudentRoute: PortfolioStudentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
