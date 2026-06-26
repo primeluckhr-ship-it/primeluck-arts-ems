@@ -243,6 +243,7 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiOpen, setAiOpen] = useState(!initial); // open by default for new plans
   const [requestMaterials, setRequestMaterials] = useState(false);
+  const [materialAmount, setMaterialAmount] = useState("");
 
   async function generateWithAI() {
     if (!aiPrompt.trim()) { toast.error("Describe the lesson topic first"); return; }
@@ -329,6 +330,7 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
             title: `Materials for: ${form.title}`,
             category: "materials",
             description: `Lesson: ${form.title} (${form.lesson_date})\n\nMaterials needed:\n${form.materials}`,
+            amount: Number(materialAmount) || null,
             urgency: "normal",
             status: "pending",
           });
@@ -413,14 +415,34 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
           <TA label="Learning Objectives" field="objectives" form={form} setForm={setForm}/>
           <TA label="Materials Needed" field="materials" form={form} setForm={setForm}/>
           {form.materials.trim() && (
-            <div className="sm:col-span-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-accent/5 border border-accent/20">
-              <input type="checkbox" id="req-materials" checked={requestMaterials}
-                onChange={(e) => setRequestMaterials(e.target.checked)}
-                className="size-4 rounded accent-accent cursor-pointer"/>
-              <label htmlFor="req-materials" className="text-xs cursor-pointer select-none">
-                <span className="font-medium text-accent">📋 Send as material request to admin</span>
-                <span className="text-muted-foreground ml-1">— auto-creates a fund request for these items</span>
-              </label>
+            <div className="sm:col-span-2 rounded-lg bg-accent/5 border border-accent/20 p-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="req-materials" checked={requestMaterials}
+                  onChange={(e) => setRequestMaterials(e.target.checked)}
+                  className="size-4 rounded accent-accent cursor-pointer"/>
+                <label htmlFor="req-materials" className="text-xs cursor-pointer select-none">
+                  <span className="font-medium text-accent">📋 Send as material request to admin</span>
+                  <span className="text-muted-foreground ml-1">— auto-creates a fund request</span>
+                </label>
+              </div>
+              {requestMaterials && (
+                <div className="flex items-center gap-2 pl-7">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Estimated cost (KES)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={materialAmount}
+                    onChange={(e) => setMaterialAmount(e.target.value)}
+                    placeholder="e.g. 3500"
+                    className="flex-1 bg-background border border-input rounded-md px-3 py-1.5 text-sm"
+                  />
+                  {Number(materialAmount) > 0 && (
+                    <span className="text-xs font-semibold text-success whitespace-nowrap">
+                      KES {Number(materialAmount).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
           <TA label="Activities" field="activities" form={form} setForm={setForm}/>
