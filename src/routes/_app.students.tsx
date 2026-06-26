@@ -20,25 +20,39 @@ const TYPE_COLORS: Record<string, string> = {
   institution: "bg-orange-500/15 text-orange-400 border-orange-500/30",
 };
 
+const BRANCH_TABS = [
+  { id: "all",              label: "All Students" },
+  { id: "branch-1",        label: "PrimeLuck Arts" },
+  { id: "dice-arts-nairobi", label: "Dice Arts" },
+];
+
 function StudentsPage() {
   const { user, activeBranch } = useAuth();
+  const isSuper = user?.role === "super_admin";
+
+  // Branch segment: super_admin can pick All / PLA / Dice; others are locked to their branch
+  const [branchSegment, setBranchSegment] = useState<string>(
+    isSuper ? (activeBranch ?? "all") : (user?.branch_id ?? "")
+  );
+
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [showAlumni, setShowAlumni] = useState(false);
   const qc = useQueryClient();
 
+  // Compute the effective branch for queries
+  const queryBranch = isSuper ? (branchSegment === "all" ? null : branchSegment) : (user?.branch_id ?? "");
+
   const { data, isLoading } = useQuery({
-    queryKey: ["students-list", user?.branch_id, user?.role],
+    queryKey: ["students-list", queryBranch, user?.role],
     queryFn: async () => {
-      const isSuper = user?.role === "super_admin";
+      let q = supabase.from("students").select("*,institutions(name),course_enrollments(course_id,status,courses(name))");
+      if (queryBranch) q = q.eq("branch_id", queryBranch);
+      q = q.order("created_at", { ascending: false });
       const [{ data: students }, { data: accounts }] = await Promise.all([
-        (isSuper
-          ? supabase.from("students").select("*,institutions(name)")
-          : supabase.from("students").select("*,institutions(name)").eq("branch_id", user?.branch_id ?? "")
-        ).order("created_at", { ascending: false }),
+        q,
         supabase.from("student_accounts").select("student_id,total_outstanding"),
       ]);
       return (students ?? []).map((s: any) => ({
@@ -48,22 +62,22 @@ function StudentsPage() {
     },
   });
 
-  // Active / alumni split — must be declared before counts useMemo uses them
+  // Active / alumni split
   const activeStudents = (data ?? []).filter((s: any) => s.status === "active");
   const alumniStudents = (data ?? []).filter((s: any) => s.status !== "active");
+
   const displayList = (showAlumni ? alumniStudents : activeStudents).filter((s: any) =>
     (typeFilter === "all" || s.student_type === typeFilter) &&
     (!search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase()))
   );
 
-  // Counts per type for summary bar
   const counts = useMemo(() => {
     const c: Record<string, number> = { junior: 0, teen: 0, adult: 0, institution: 0 };
     activeStudents.forEach((s: any) => { const t = s.student_type ?? "adult"; if (c[t] !== undefined) c[t]++; });
     return c;
   }, [data]);
 
-  const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
+  const isAdmin = ["super_admin", "finance_admin", "dice_admin"].includes(user?.role ?? "");
 
   async function removeStudent(s: any, newStatus: string) {
     const label = newStatus === "graduated" ? "Graduate" : "Remove (Left)";
@@ -73,8 +87,25 @@ function StudentsPage() {
     toast.success(`${s.first_name} moved to Alumni`);
   }
 
+  // The branch that a newly added student will belong to
+  const addBranch = isSuper
+    ? (branchSegment === "all" ? (activeBranch ?? "branch-1") : branchSegment)
+    : (user?.branch_id ?? "branch-1");
+
   return (
     <div className="space-y-4">
+      {/* Super admin branch segment tabs */}
+      {isSuper && (
+        <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
+          {BRANCH_TABS.map((tab) => (
+            <button key={tab.id} onClick={() => setBranchSegment(tab.id)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${branchSegment === tab.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Type summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Object.entries(TYPE_LABELS).map(([type, label]) => (
@@ -90,10 +121,12 @@ function StudentsPage() {
         title="Students"
         subtitle={showAlumni ? `${alumniStudents.length} alumni` : `${activeStudents.length} active`}
         action={
-          <button onClick={() => { setEditing(null); setOpen(true); }}
-            className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
-            <Plus className="size-4" /> Add Student
-          </button>
+          isAdmin && (
+            <button onClick={() => { setEditing(null); setOpen(true); }}
+              className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
+              <Plus className="size-4" /> Add Student
+            </button>
+          )
         }
       >
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
@@ -114,65 +147,89 @@ function StudentsPage() {
           <div className="flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => setShowAlumni(false)}
               className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${!showAlumni ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-              <UserCheck className="size-3.5"/>Active ({activeStudents.length})
+              <UserCheck className="size-3.5" />Active ({activeStudents.length})
             </button>
             <button onClick={() => setShowAlumni(true)}
               className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${showAlumni ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-              <GraduationCap className="size-3.5"/>Alumni ({alumniStudents.length})
+              <GraduationCap className="size-3.5" />Alumni ({alumniStudents.length})
             </button>
           </div>
         </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-muted-foreground border-b border-border">
               <th className="py-2 pr-3">Admission #</th>
               <th className="py-2 pr-3">Name</th>
               <th className="py-2 pr-3">Type / Institution</th>
-              <th className="py-2 pr-3">Level</th>
+              {isSuper && branchSegment === "all" && <th className="py-2 pr-3">Academy</th>}
+              <th className="py-2 pr-3">Course(s)</th>
               <th className="py-2 pr-3">Status</th>
               <th className="py-2 text-right pr-3">Balance</th>
-              <th className="py-2 w-10"></th>
+              <th className="py-2 w-20"></th>
             </tr></thead>
             <tbody>
-              {isLoading && <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
-              {displayList.map((s: any) => (
-                <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
-                  <td className="py-2.5 pr-3 font-mono text-xs">
-                    <Link to="/students/$id" params={{ id: s.id }} className="text-accent hover:underline">{s.admission_number}</Link>
-                  </td>
-                  <td className="py-2.5 pr-3 font-medium">{s.first_name} {s.last_name}</td>
-                  <td className="py-2.5 pr-3">
-                    <Badge className={TYPE_COLORS[s.student_type ?? "adult"]}>{TYPE_LABELS[s.student_type ?? "adult"]}</Badge>
-                    {s.student_type === "institution" && s.institutions?.name && (
-                      <div className="text-xs text-muted-foreground mt-0.5">{s.institutions.name}</div>
+              {isLoading && <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">Loading…</td></tr>}
+              {displayList.map((s: any) => {
+                const activeCourses = (s.course_enrollments ?? []).filter((e: any) => e.status === "active");
+                return (
+                  <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
+                    <td className="py-2.5 pr-3 font-mono text-xs">
+                      <Link to="/students/$id" params={{ id: s.id }} className="text-accent hover:underline">{s.admission_number}</Link>
+                    </td>
+                    <td className="py-2.5 pr-3 font-medium">{s.first_name} {s.last_name}</td>
+                    <td className="py-2.5 pr-3">
+                      <Badge className={TYPE_COLORS[s.student_type ?? "adult"]}>{TYPE_LABELS[s.student_type ?? "adult"]}</Badge>
+                      {s.student_type === "institution" && s.institutions?.name && (
+                        <div className="text-xs text-muted-foreground mt-0.5">{s.institutions.name}</div>
+                      )}
+                    </td>
+                    {isSuper && branchSegment === "all" && (
+                      <td className="py-2.5 pr-3">
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${s.branch_id === "dice-arts-nairobi" ? "bg-orange-500/15 text-orange-400" : "bg-blue-500/15 text-blue-400"}`}>
+                          {s.branch_id === "dice-arts-nairobi" ? "Dice Arts" : "PrimeLuck"}
+                        </span>
+                      </td>
                     )}
-                  </td>
-                  <td className="py-2.5 pr-3 text-muted-foreground">{s.skill_level || "—"}</td>
-                  <td className="py-2.5 pr-3"><Badge className={getStatusColor(s.status)}>{s.status === "left" ? "Left" : s.status === "graduated" ? "Graduated 🎓" : s.status}</Badge></td>
-                  <td className="py-2.5 pr-3 text-right font-semibold">{formatKES(s.outstanding)}</td>
-                  <td className="py-2.5">
-                    <div className="flex gap-0.5">
-                      <button onClick={() => { setEditing(s); setOpen(true); }} className="p-1.5 rounded hover:bg-muted" title="Edit"><Pencil className="size-3.5" /></button>
-                      {isAdmin && !showAlumni && (
-                        <>
-                          <button onClick={() => removeStudent(s, "graduated")} className="p-1.5 rounded hover:bg-success/20 text-success" title="Graduated">
-                            <GraduationCap className="size-3.5"/>
+                    <td className="py-2.5 pr-3 text-xs text-muted-foreground">
+                      {activeCourses.length > 0
+                        ? activeCourses.map((e: any) => e.courses?.name).filter(Boolean).join(", ")
+                        : <span className="italic">Not enrolled</span>}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Badge className={getStatusColor(s.status)}>
+                        {s.status === "left" ? "Left" : s.status === "graduated" ? "Graduated 🎓" : s.status}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right font-semibold">{formatKES(s.outstanding)}</td>
+                    <td className="py-2.5">
+                      <div className="flex gap-0.5">
+                        <button onClick={() => { setEditing(s); setOpen(true); }} className="p-1.5 rounded hover:bg-muted" title="Edit"><Pencil className="size-3.5" /></button>
+                        {isAdmin && !showAlumni && (
+                          <>
+                            <button onClick={() => removeStudent(s, "graduated")} className="p-1.5 rounded hover:bg-success/20 text-success" title="Graduated">
+                              <GraduationCap className="size-3.5" />
+                            </button>
+                            <button onClick={() => removeStudent(s, "left")} className="p-1.5 rounded hover:bg-danger/20 text-danger" title="Left / Withdrawn">
+                              <UserMinus className="size-3.5" />
+                            </button>
+                          </>
+                        )}
+                        {isAdmin && showAlumni && (
+                          <button onClick={() => removeStudent(s, "active")} className="p-1.5 rounded hover:bg-success/20 text-success text-xs px-2" title="Restore">
+                            Restore
                           </button>
-                          <button onClick={() => removeStudent(s, "left")} className="p-1.5 rounded hover:bg-danger/20 text-danger" title="Left / Withdrawn">
-                            <UserMinus className="size-3.5"/>
-                          </button>
-                        </>
-                      )}
-                      {isAdmin && showAlumni && (
-                        <button onClick={() => removeStudent(s, "active")} className="p-1.5 rounded hover:bg-success/20 text-success text-xs px-2" title="Restore to active">
-                          Restore
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!isLoading && !displayList.length && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">{showAlumni ? "No alumni yet" : "No active students"}</td></tr>}
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!isLoading && !displayList.length && (
+                <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">
+                  {showAlumni ? "No alumni yet" : "No active students"}
+                </td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -181,6 +238,7 @@ function StudentsPage() {
       {open && (
         <StudentForm
           initial={editing}
+          targetBranch={addBranch}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["students-list"], exact: false }); }}
         />
@@ -189,8 +247,10 @@ function StudentsPage() {
   );
 }
 
-function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
-  const { user, activeBranch } = useAuth();
+function StudentForm({ initial, targetBranch, onClose, onSaved }: {
+  initial: any; targetBranch: string; onClose: () => void; onSaved: () => void;
+}) {
+  const { user } = useAuth();
   const [form, setForm] = useState({
     first_name: initial?.first_name ?? "",
     last_name: initial?.last_name ?? "",
@@ -206,23 +266,30 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
     student_type: initial?.student_type ?? "adult",
   });
   const [saving, setSaving] = useState(false);
+  const [institutionId, setInstitutionId] = useState(initial?.institution_id ?? "");
+  const [selectedCourseId, setSelectedCourseId] = useState(
+    initial?.course_enrollments?.find((e: any) => e.status === "active")?.course_id ?? ""
+  );
+
+  const branchForLookup = targetBranch;
 
   const { data: institutions } = useQuery({
-    queryKey: ["institutions-list", user?.branch_id],
-    queryFn: async () => {
-      let q = supabase.from("institutions").select("id,name").eq("is_active", true).order("name");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
-      return (await q).data ?? [];
-    },
+    queryKey: ["institutions-list", branchForLookup],
+    queryFn: async () => (await supabase.from("institutions").select("id,name")
+      .eq("is_active", true).eq("branch_id", branchForLookup).order("name")).data ?? [],
   });
 
-  const [institutionId, setInstitutionId] = useState(initial?.institution_id ?? "");
+  const { data: courses } = useQuery({
+    queryKey: ["courses-active", branchForLookup],
+    queryFn: async () => (await supabase.from("courses").select("id,name")
+      .eq("status", "active").eq("branch_id", branchForLookup).order("name")).data ?? [],
+  });
 
   async function save() {
+    if (!form.first_name.trim()) { toast.error("First name is required"); return; }
     setSaving(true);
     try {
-      // Auto-generate admission number
-      const prefix = user?.branch_id === "dice-arts-nairobi" ? "DICE" : "PLA";
+      const prefix = branchForLookup === "dice-arts-nairobi" ? "DICE" : "PLA";
       const { data: lastStu } = await supabase.from("students")
         .select("admission_number")
         .ilike("admission_number", `${prefix}%`)
@@ -230,26 +297,47 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
       const lastNum = parseInt((lastStu?.[0]?.admission_number ?? `${prefix}0000`).replace(/\D/g, "")) || 0;
       const admission_number = initial?.admission_number || `${prefix}${String(lastNum + 1).padStart(4, "0")}`;
 
-      const payload = { 
+      const payload = {
         ...form,
         admission_number,
         institution_id: institutionId || null,
-        branch_id: user?.branch_id ?? "",
-        // Date fields must be null (not "") for Postgres DATE type
-        date_of_birth:    form.date_of_birth    || null,
-        enrollment_date:  form.enrollment_date  || null,
-        // map parent_phone to emergency_contact_phone for backwards compat
+        branch_id: branchForLookup,
+        date_of_birth: form.date_of_birth || null,
+        enrollment_date: form.enrollment_date || null,
         emergency_contact_phone: form.parent_phone || null,
       };
+
       if (initial) {
         const { error } = await supabase.from("students").update(payload).eq("id", initial.id);
         if (error) throw error;
+        // Update course enrollment if changed
+        if (selectedCourseId) {
+          const existing = initial.course_enrollments?.find((e: any) => e.status === "active");
+          if (!existing || existing.course_id !== selectedCourseId) {
+            if (existing) await supabase.from("course_enrollments").update({ status: "inactive" }).eq("course_id", existing.course_id).eq("student_id", initial.id);
+            await supabase.from("course_enrollments").upsert({
+              student_id: initial.id, course_id: selectedCourseId,
+              status: "active", enrollment_date: form.enrollment_date || new Date().toISOString().slice(0, 10),
+            }, { onConflict: "student_id,course_id" });
+          }
+        }
         toast.success("Student updated");
       } else {
         const { error, data: inserted } = await supabase.from("students").insert(payload).select().single();
         if (error) throw error;
+        // Enroll in course if selected
+        if (selectedCourseId && inserted) {
+          await supabase.from("course_enrollments").insert({
+            student_id: inserted.id, course_id: selectedCourseId,
+            status: "active", enrollment_date: form.enrollment_date || new Date().toISOString().slice(0, 10),
+          });
+        }
+        await logAudit({
+          user_id: user?.id, branch_id: payload.branch_id, action: "CREATE",
+          entity_type: "student", entity_id: inserted?.id,
+          description: `Added student: ${payload.first_name} ${payload.last_name}`,
+        });
         toast.success("Student added");
-        await logAudit({ user_id: user?.id, branch_id: payload.branch_id, action: "CREATE", entity_type: "student", entity_id: inserted?.id, description: `Added student: ${payload.first_name} ${payload.last_name}` });
       }
       onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
@@ -258,9 +346,17 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-4">{initial ? "Edit Student" : "Add Student"}</h2>
+        <h2 className="text-lg font-semibold mb-1">{initial ? "Edit Student" : "Add Student"}</h2>
+        {!initial && (
+          <p className="text-xs text-muted-foreground mb-4">
+            Adding to: <span className="font-semibold text-accent">
+              {branchForLookup === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts Academy"}
+            </span>
+          </p>
+        )}
+
         {/* ── Section 1: Student type ── */}
-        <div className="mb-1">
+        <div className="mb-4">
           <p className="text-xs font-medium text-muted-foreground mb-2">Student type</p>
           <div className="flex gap-2 flex-wrap">
             {Object.entries(TYPE_LABELS).map(([type, label]) => (
@@ -284,7 +380,18 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
           )}
         </div>
 
-        {/* ── Section 2: Personal details ── */}
+        {/* ── Section 2: Course enrollment ── */}
+        <div className="border-t border-border/50 pt-4 mb-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">Enroll in Course</p>
+          <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}
+            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+            <option value="">— No course (enroll later) —</option>
+            {(courses ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <p className="text-xs text-muted-foreground mt-1">Student will appear in this course's attendance sessions</p>
+        </div>
+
+        {/* ── Section 3: Personal details ── */}
         <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
           <Field label="First name"><Input value={form.first_name} onChange={(v) => setForm({ ...form, first_name: v })} /></Field>
           <Field label="Last name"><Input value={form.last_name} onChange={(v) => setForm({ ...form, last_name: v })} /></Field>
@@ -293,7 +400,7 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
           </Field>
         </div>
 
-        {/* ── Section 3: Academic info ── */}
+        {/* ── Section 4: Academic info ── */}
         <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
           <Field label="School / Institution name"><Input value={form.school_name} onChange={(v) => setForm({ ...form, school_name: v })} /></Field>
           <Field label="Grade / Class"><Input value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} placeholder="e.g. Form 2, Grade 5" /></Field>
@@ -310,7 +417,7 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
           </Field>
         </div>
 
-        {/* ── Section 4: Status & notes ── */}
+        {/* ── Section 5: Status & notes ── */}
         <div className="border-t border-border/50 pt-4 grid sm:grid-cols-2 gap-3">
           <Field label="Status">
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
@@ -328,6 +435,7 @@ function StudentForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
               placeholder="Any additional notes…" />
           </Field>
         </div>
+
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
           <button onClick={save} disabled={saving}
