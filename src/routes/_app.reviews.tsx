@@ -48,26 +48,30 @@ function FeedbackAdminPage() {
 
   return (
     <div className="space-y-4">
-      {/* Share links */}
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="font-semibold text-sm">PrimeLuck Feedback Link</div>
-            <div className="text-xs text-muted-foreground mt-0.5">/feedback — share with parents</div>
+      {/* Share links — super_admin sees both, others see own branch only */}
+      <div className={`grid gap-3 ${user?.role === "super_admin" ? "sm:grid-cols-2" : "sm:grid-cols-1 max-w-md"}`}>
+        {(user?.role === "super_admin" || user?.branch_id === "branch-1") && (
+          <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold text-sm">PrimeLuck Arts Feedback Link</div>
+              <div className="text-xs text-muted-foreground mt-0.5">/feedback — share with parents & students</div>
+            </div>
+            <button onClick={() => copyLink()} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-sm hover:border-accent hover:text-accent transition-colors">
+              <Link2 className="size-3.5"/>Copy
+            </button>
           </div>
-          <button onClick={() => copyLink()} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-sm hover:border-accent hover:text-accent transition-colors">
-            <Link2 className="size-3.5"/>Copy
-          </button>
-        </div>
-        <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="font-semibold text-sm">Dice Arts Feedback Link</div>
-            <div className="text-xs text-muted-foreground mt-0.5">/feedback?branch=dice</div>
+        )}
+        {(user?.role === "super_admin" || user?.branch_id === "dice-arts-nairobi") && (
+          <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold text-sm">Dice Arts Feedback Link</div>
+              <div className="text-xs text-muted-foreground mt-0.5">/feedback?branch=dice — share with partners & students</div>
+            </div>
+            <button onClick={() => copyLink("dice")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-accent/30 text-accent text-sm hover:bg-accent/10 transition-colors">
+              <Link2 className="size-3.5"/>Copy
+            </button>
           </div>
-          <button onClick={() => copyLink("dice")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-accent/30 text-accent text-sm hover:bg-accent/10 transition-colors">
-            <Link2 className="size-3.5"/>Copy
-          </button>
-        </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">

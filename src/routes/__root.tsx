@@ -48,8 +48,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "PrimeLuck Arts Academy" },
-      { name: "description", content: "PrimeLuck Arts Academy Management System" },
+      { title: "Arts Academy EMS" },
+      { name: "description", content: "Arts Academy Education Management System" },
       { name: "theme-color", content: "#2d1b69" },
     ],
     links: [

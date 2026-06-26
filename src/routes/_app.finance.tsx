@@ -552,7 +552,7 @@ function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
   );
 }
 
-/* ── INCOME (Dice Arts) ── */
+/* ── INCOME ── */
 function IncomeTab() {
   const { user, activeBranch } = useAuth();
   const qc = useQueryClient();

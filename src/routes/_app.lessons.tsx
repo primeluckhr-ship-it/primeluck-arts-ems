@@ -194,7 +194,7 @@ function GoogleCalendarSync({ plan }: { plan: any }) {
 
 function WhatsAppSharePlan({ plan }: { plan: any }) {
   function share() {
-    const msg = `*Lesson Plan: ${plan.title}*\n\n📅 Date: ${plan.lesson_date}\n⏱ Duration: ${plan.duration_minutes} mins\n\n🎯 *Objectives*\n${plan.objectives ?? "—"}\n\n📦 *Materials Needed*\n${plan.materials ?? "—"}\n\n🎨 *Activities*\n${plan.activities ?? "—"}\n\n${plan.homework ? `📚 *Homework*\n${plan.homework}\n\n` : ""}Shared by PrimeLuck Arts Academy 🎸`;
+    const msg = `*Lesson Plan: ${plan.title}*\n\n📅 Date: ${plan.lesson_date}\n⏱ Duration: ${plan.duration_minutes} mins\n\n🎯 *Objectives*\n${plan.objectives ?? "—"}\n\n📦 *Materials Needed*\n${plan.materials ?? "—"}\n\n🎨 *Activities*\n${plan.activities ?? "—"}\n\n${plan.homework ? `📚 *Homework*\n${plan.homework}\n\n` : ""}Shared by ${plan.courses?.branch_id === "dice-arts-nairobi" ? "Dice Arts Academy 🎨" : "PrimeLuck Arts Academy 🎨"}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   }
   return (
