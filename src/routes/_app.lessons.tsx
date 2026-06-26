@@ -301,7 +301,7 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
       setAiOpen(false); // collapse AI panel, show filled form
       toast.success("Lesson plan generated — review and save");
     } catch (e: any) {
-      toast.error("AI generation unavailable — fill the form manually and click Save");
+      toast.error("AI error: " + (e.message ?? "unknown"), { duration: 10000 });
     } finally { setAiGenerating(false); }
   }
 
