@@ -26,22 +26,18 @@ function AttendancePage() {
 
   // For teachers: only their sessions. For admin: all sessions
   const { data: sessions, isLoading } = useQuery({
-    queryKey:["sessions-today", user?.id, user?.role],
+    queryKey:["sessions-today", user?.id, user?.role, activeBranch],
     queryFn: async () => {
+      const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       let q = supabase.from("sessions")
         .select("*,courses(name,instructor_id,per_session_billing,session_fee,branch_id)")
         .order("start_time");
-      // Instructors see all sessions for their branch so they can take attendance for any class
-      if (user?.role === "teacher" || user?.role === "instructor") {
-        q = q.eq("courses.branch_id", user?.branch_id ?? "");
-      }
-      if (user?.role === "dice_admin") {
-        q = q.eq("courses.branch_id", user.branch_id);
-      }
       if (user?.role === "student") {
         const { data: enr } = await supabase.from("course_enrollments").select("course_id").eq("student_id", user.linked_entity_id??user.id);
         const ids = (enr??[]).map((e:any) => e.course_id);
         if (ids.length) q = q.in("course_id", ids);
+      } else {
+        q = q.eq("courses.branch_id", branch);
       }
       return (await q.order("session_date", {ascending:false})).data ?? [];
     },
