@@ -182,8 +182,17 @@ function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>voi
           <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(v)=>setForm({...form,whatsapp:v})} placeholder="+2547…"/></Field>
           <Field label="Relationship">
             <select value={form.relationship} onChange={(e)=>setForm({...form,relationship:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
-              <option value="parent">Parent</option><option value="guardian">Guardian</option>
-              <option value="grandparent">Grandparent</option><option value="sibling">Sibling</option><option value="other">Other</option>
+              <option value="">— Select relationship —</option>
+              <option value="mother">Mother</option>
+              <option value="father">Father</option>
+              <option value="guardian">Guardian</option>
+              <option value="grandmother">Grandmother</option>
+              <option value="grandfather">Grandfather</option>
+              <option value="aunt">Aunt</option>
+              <option value="uncle">Uncle</option>
+              <option value="sibling">Sibling</option>
+              <option value="sponsor">Sponsor</option>
+              <option value="other">Other</option>
             </select>
           </Field>
           <Field label="Address"><Input value={form.address} onChange={(v)=>setForm({...form,address:v})}/></Field>
