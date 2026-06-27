@@ -146,7 +146,7 @@ function AttendanceSheet({ session, onBack }:{ session:any; onBack:()=>void }) {
     setSaving(true);
     try {
       const rows = (enrolled??[]).map((s:any) => ({
-        session_id: session.id, student_id: s.id, course_id: session.course_id,
+        session_id: session.id, student_id: s.id,
         status: marks[s.id] ?? "absent", marked_by: null,
       }));
 
