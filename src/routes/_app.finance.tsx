@@ -12,6 +12,108 @@ import { Field, Input } from "./_app.students";
 
 export const Route = createFileRoute("/_app/finance")({ component: FinancePage });
 
+
+// ── Profit Summary (admin only) ──────────────────────────────────────────────
+function ProfitSummary({ branch }: { branch: string }) {
+  const [period, setPeriod] = useState<"month"|"term"|"year"|"all">("month");
+
+  const now = new Date();
+  const fromDate = period === "month"
+    ? new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10)
+    : period === "term"
+    ? new Date(now.getFullYear(), Math.floor(now.getMonth()/4)*4, 1).toISOString().slice(0,10)
+    : period === "year"
+    ? `${now.getFullYear()}-01-01`
+    : "2000-01-01";
+
+  // Student payments collected
+  const { data: payments } = useQuery({
+    queryKey: ["profit-payments", branch, fromDate],
+    queryFn: async () => {
+      let q = supabase.from("payments").select("amount,payment_date").gte("payment_date", fromDate);
+      if (branch) q = q.eq("branch_id", branch);
+      return (await q).data ?? [];
+    },
+  });
+
+  // Income records
+  const { data: income } = useQuery({
+    queryKey: ["profit-income", branch, fromDate],
+    queryFn: async () =>
+      (await supabase.from("income_records").select("amount").eq("branch_id", branch).gte("income_date", fromDate)).data ?? [],
+  });
+
+  // Expenditures
+  const { data: expenditures } = useQuery({
+    queryKey: ["profit-expenditures", branch, fromDate],
+    queryFn: async () =>
+      (await supabase.from("expenditures").select("amount").eq("branch_id", branch).gte("expense_date", fromDate)).data ?? [],
+  });
+
+  // Approved fund requests
+  const { data: fundRequests } = useQuery({
+    queryKey: ["profit-fund", branch, fromDate],
+    queryFn: async () =>
+      (await supabase.from("fund_requests").select("amount").eq("branch_id", branch).eq("status","approved").gte("created_at", fromDate)).data ?? [],
+  });
+
+  const totalPayments   = (payments??[]).reduce((s:number,p:any)=>s+Number(p.amount),0);
+  const totalIncome     = (income??[]).reduce((s:number,r:any)=>s+Number(r.amount),0);
+  const totalExpend     = (expenditures??[]).reduce((s:number,e:any)=>s+Number(e.amount),0);
+  const totalFundReqs   = (fundRequests??[]).reduce((s:number,f:any)=>s+Number(f.amount||0),0);
+
+  const grossRevenue = totalPayments + totalIncome;
+  const totalExpenses = totalExpend + totalFundReqs;
+  const netProfit = grossRevenue - totalExpenses;
+  const margin = grossRevenue > 0 ? ((netProfit / grossRevenue) * 100).toFixed(1) : "0";
+  const isProfit = netProfit >= 0;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-sm flex items-center gap-2">
+          <span className="text-base">📊</span> Profit & Loss Summary
+        </h2>
+        <div className="flex gap-1 bg-muted rounded-lg p-1">
+          {(["month","term","year","all"] as const).map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize transition-colors ${period===p ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              {p === "all" ? "All time" : `This ${p}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Net profit — big number */}
+      <div className={`rounded-xl p-4 text-center ${isProfit ? "bg-success/10 border border-success/20" : "bg-danger/10 border border-danger/20"}`}>
+        <p className="text-xs text-muted-foreground mb-1">{isProfit ? "Net Profit" : "Net Loss"}</p>
+        <p className={`text-3xl font-bold ${isProfit ? "text-success" : "text-danger"}`}>{formatKES(Math.abs(netProfit))}</p>
+        <p className="text-xs text-muted-foreground mt-1">Profit margin: {isProfit ? "+" : "-"}{Math.abs(Number(margin))}%</p>
+      </div>
+
+      {/* Breakdown */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-success/5 border border-success/20 p-3">
+          <p className="text-xs text-muted-foreground mb-1">💰 Total Revenue</p>
+          <p className="text-lg font-bold text-success">{formatKES(grossRevenue)}</p>
+          <div className="text-xs text-muted-foreground mt-1.5 space-y-0.5">
+            <div className="flex justify-between"><span>Student fees</span><span>{formatKES(totalPayments)}</span></div>
+            <div className="flex justify-between"><span>Other income</span><span>{formatKES(totalIncome)}</span></div>
+          </div>
+        </div>
+        <div className="rounded-xl bg-danger/5 border border-danger/20 p-3">
+          <p className="text-xs text-muted-foreground mb-1">💸 Total Expenses</p>
+          <p className="text-lg font-bold text-danger">{formatKES(totalExpenses)}</p>
+          <div className="text-xs text-muted-foreground mt-1.5 space-y-0.5">
+            <div className="flex justify-between"><span>Expenditures</span><span>{formatKES(totalExpend)}</span></div>
+            <div className="flex justify-between"><span>Fund requests</span><span>{formatKES(totalFundReqs)}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FinancePage() {
   const { user, activeBranch } = useAuth();
   const isDice = user?.role === "dice_admin";
@@ -21,8 +123,12 @@ function FinancePage() {
     ? ["invoices","payments","arrears","expenditure","income"] as const
     : ["invoices","payments","arrears","expenditure"] as const;
 
+  const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+
   return (
     <div className="space-y-4">
+      {isAdmin && <ProfitSummary branch={branch} />}
       <div className="flex gap-1 border-b border-border overflow-x-auto">
         {tabs.map((t) => (
           <button key={t} onClick={() => setTab(t as any)}
