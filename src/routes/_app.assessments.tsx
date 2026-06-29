@@ -66,7 +66,7 @@ function AssessmentsPage() {
     },
   });
 
-  const canCreate = ["super_admin","teacher","instructor"].includes(user?.role ?? "");
+  const canCreate = ["super_admin","teacher","instructor","dice_admin"].includes(user?.role ?? "");
 
   return (
     <PageCard

@@ -44,6 +44,7 @@ function AttendancePage() {
   });
 
   const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
+  const isInstructor = user?.role === "instructor" || user?.role === "teacher";
 
   async function deleteSession(session: any, e: React.MouseEvent) {
     e.stopPropagation();
