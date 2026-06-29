@@ -35,7 +35,11 @@ function AuditPage() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="w-full bg-background border border-input rounded-md pl-9 pr-3 py-2 text-sm" />
         </div>
         <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="bg-background border border-input rounded-md px-3 py-2 text-sm">
-          <option value="all">All actions</option><option>create</option><option>update</option><option>delete</option><option>login</option>
+          <option value="all">All actions</option>
+          <option value="LOGIN">Login</option>
+          <option value="CREATE">Create</option>
+          <option value="UPDATE">Update</option>
+          <option value="DELETE">Delete</option>
         </select>
       </div>
       <div className="overflow-x-auto">
@@ -46,8 +50,26 @@ function AuditPage() {
               <tr key={r.id} className="border-b border-border/50">
                 <td className="py-2.5 text-xs text-muted-foreground">{format(new Date(r.created_at), "dd MMM HH:mm:ss")}</td>
                 <td className="py-2.5">{r.users ? `${r.users.first_name} ${r.users.last_name}` : <span className="text-muted-foreground">System</span>}</td>
-                <td className="py-2.5"><Badge className="bg-muted text-foreground border-border">{r.action}</Badge></td>
-                <td className="py-2.5">{r.entity_type}</td>
+                <td className="py-2.5">
+                  <Badge className={
+                    r.action === "DELETE" ? "bg-danger/15 text-danger border-danger/30" :
+                    r.action === "CREATE" ? "bg-success/15 text-success border-success/30" :
+                    r.action === "LOGIN"  ? "bg-blue-500/15 text-blue-400 border-blue-500/30" :
+                    r.action === "UPDATE" ? "bg-warning/15 text-warning border-warning/30" :
+                    "bg-muted text-foreground border-border"
+                  }>{r.action}</Badge>
+                </td>
+                <td className="py-2.5 capitalize">
+                  {r.entity_type === "payment" ? "💰 Payment" :
+                   r.entity_type === "student" ? "🎓 Student" :
+                   r.entity_type === "fund_request" ? "📋 Fund Request" :
+                   r.entity_type === "attendance" ? "✅ Attendance" :
+                   r.entity_type === "instructor" ? "👨‍🏫 Instructor" :
+                   r.entity_type === "course" ? "📚 Course" :
+                   r.entity_type === "announcement" ? "📢 Announcement" :
+                   r.entity_type === "user" ? "👤 User" :
+                   r.entity_type || "—"}
+                </td>
                 <td className="py-2.5 font-mono text-xs text-muted-foreground">{r.entity_id?.slice(0, 8) ?? "—"}</td>
               </tr>
             ))}

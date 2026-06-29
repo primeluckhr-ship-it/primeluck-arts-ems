@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { Plus, Pencil, Trash2, AlertTriangle, MessageCircle, X, Copy, Check, Send } from "lucide-react";
@@ -252,8 +252,13 @@ function AnnForm({ initial, onClose, onSaved, branch }: { initial: any; onClose:
     setSaving(true);
     try {
       const payload: any = { ...form, created_by: user?.id, branch_id: branch };
-      if (initial) await supabase.from("announcements").update(payload).eq("id", initial.id).throwOnError();
-      else await supabase.from("announcements").insert(payload).throwOnError();
+      if (initial) {
+        await supabase.from("announcements").update(payload).eq("id", initial.id).throwOnError();
+        logAudit({ user_id: user?.id, branch_id: branch, action: "UPDATE", entity_type: "announcement", entity_id: initial.id, description: `Announcement updated: "${form.title}"` });
+      } else {
+        await supabase.from("announcements").insert(payload).throwOnError();
+        logAudit({ user_id: user?.id, branch_id: branch, action: "CREATE", entity_type: "announcement", description: `Announcement posted: "${form.title}" [${form.priority}]` });
+      }
       toast.success("Posted");
       onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }

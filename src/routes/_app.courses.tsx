@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES, getStatusColor } from "@/lib/pla";
@@ -53,6 +53,7 @@ function CoursesPage() {
       await supabase.from("institutions").update({ course_id: null }).eq("course_id", course.id);
       const { error } = await supabase.from("courses").delete().eq("id", course.id);
       if (error) throw error;
+      logAudit({ user_id: user?.id, branch_id: course.branch_id, action: "DELETE", entity_type: "course", entity_id: course.id, description: `Course deleted: "${course.name}"` });
       qc.invalidateQueries({ queryKey: ["courses"] });
       toast.success(`"${course.name}" deleted`);
     } catch (err: any) {

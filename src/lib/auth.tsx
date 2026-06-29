@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { supabase } from "./supabase";
+import { supabase, logAudit } from "./supabase";
 import { sha256, type Role } from "./pla";
 
 export interface SessionUser {

@@ -386,7 +386,7 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
     setSaving(true);
     try {
       const amount = Number(form.amount);
-      const { error } = await supabase.from("payments").insert({
+      const { error, data: newPay } = await supabase.from("payments").insert({
         student_id: studentId, amount,
         receipt_number: generateReceiptNumber(),
         payment_method: form.payment_method,

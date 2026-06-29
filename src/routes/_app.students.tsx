@@ -108,6 +108,7 @@ function StudentsPage() {
       await supabase.from("users").update({ linked_entity_id: null }).eq("linked_entity_id", s.id);
       const { error } = await supabase.from("students").delete().eq("id", s.id);
       if (error) throw error;
+      logAudit({ user_id: user?.id, branch_id: s.branch_id, action: "DELETE", entity_type: "student", entity_id: s.id, description: `Student permanently deleted: ${s.first_name} ${s.last_name} (${s.admission_number || s.id})` });
       qc.invalidateQueries({ queryKey: ["students-list"], exact: false });
       toast.success(`${s.first_name} ${s.last_name} permanently deleted`);
     } catch (e: any) {
