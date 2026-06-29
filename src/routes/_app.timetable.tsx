@@ -133,11 +133,15 @@ function TimetablePage() {
       const from = format(weekStart,"yyyy-MM-dd");
       const to   = format(weekEnd,"yyyy-MM-dd");
       const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      // Two-step: get branch courses first, then filter sessions
+      const { data: brCourses } = await supabase.from("courses").select("id").eq("branch_id", branch);
+      const brCourseIds = (brCourses??[]).map((c:any) => c.id);
+      if (!brCourseIds.length) return [];
       const { data } = await supabase.from("sessions")
         .select("*,courses(name,branch_id)")
+        .in("course_id", brCourseIds)
         .gte("session_date", from)
         .lte("session_date", to)
-        .eq("courses.branch_id", branch)
         .order("start_time");
       return (data ?? []).filter((s: any) => s.courses !== null);
     },

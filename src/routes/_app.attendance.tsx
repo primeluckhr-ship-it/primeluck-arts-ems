@@ -29,17 +29,32 @@ function AttendancePage() {
     queryKey:["sessions-today", user?.id, user?.role, activeBranch],
     queryFn: async () => {
       const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
-      let q = supabase.from("sessions")
-        .select("*,courses(name,instructor_id,per_session_billing,session_fee,branch_id)")
-        .order("start_time");
+
+      // Resolve allowed course IDs first — prevents cross-branch leakage via join filters
+      let allowedCourseIds: string[] = [];
       if (user?.role === "student") {
         const { data: enr } = await supabase.from("course_enrollments").select("course_id").eq("student_id", user.linked_entity_id??user.id);
-        const ids = (enr??[]).map((e:any) => e.course_id);
-        if (ids.length) q = q.in("course_id", ids);
+        allowedCourseIds = (enr??[]).map((e:any) => e.course_id);
+      } else if (user?.role === "instructor" || user?.role === "teacher") {
+        let cq = supabase.from("courses").select("id").eq("status","active");
+        if (branch) cq = cq.eq("branch_id", branch);
+        if (user.linked_entity_id) cq = cq.eq("instructor_id", user.linked_entity_id);
+        const { data: myCourses } = await cq;
+        allowedCourseIds = (myCourses??[]).map((c:any) => c.id);
       } else {
-        q = q.eq("courses.branch_id", branch);
+        // Admin/finance — all active courses in this branch
+        const { data: branchCourses } = await supabase.from("courses").select("id").eq("branch_id", branch).eq("status","active");
+        allowedCourseIds = (branchCourses??[]).map((c:any) => c.id);
       }
-      return (await q.order("session_date", {ascending:false})).data ?? [];
+
+      if (!allowedCourseIds.length) return [];
+
+      // Filter sessions directly by course_id — no ambiguous join filter
+      const { data } = await supabase.from("sessions")
+        .select("*,courses(name,instructor_id,per_session_billing,session_fee,branch_id)")
+        .in("course_id", allowedCourseIds)
+        .order("session_date", {ascending:false});
+      return (data ?? []).filter((s:any) => s.courses !== null);
     },
   });
 
