@@ -108,6 +108,33 @@ function PortfolioPage() {
 
   return (
     <div className="space-y-4">
+      {/* Gallery Share Banner — admin only */}
+      {isAdmin && (() => {
+        const galleryBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+        const galleryUrl = `${window.location.origin}/portfolio/gallery/${galleryBranch}`;
+        return (
+          <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold mb-1">🌐 Academy Gallery — Public Link</p>
+              <p className="text-xs text-muted-foreground mb-2">Share with parents, on social media, or at events. Shows all shared artworks from all students.</p>
+              <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-1.5">
+                <span className="text-xs font-mono text-muted-foreground truncate flex-1 select-all">{galleryUrl}</span>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => copyLink(galleryUrl, "Gallery link copied!")}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors">
+                <Copy className="size-3.5"/>Copy Link
+              </button>
+              <a href={galleryUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors">
+                <ExternalLink className="size-3.5"/>Preview
+              </a>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex items-center gap-2 flex-wrap">
         {/* View toggle */}
         <div className="flex rounded-lg border border-border overflow-hidden">
