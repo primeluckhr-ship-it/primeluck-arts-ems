@@ -32,6 +32,7 @@ function ProfitSummary({ branch }: { branch: string }) {
     queryFn: async () => {
       let q = supabase.from("payments").select("amount,payment_date").gte("payment_date", fromDate);
       if (branch) q = q.eq("branch_id", branch);
+      // already filtered
       return (await q).data ?? [];
     },
   });
@@ -164,7 +165,8 @@ function InvoicesTab() {
         .select("*,students(first_name,last_name,admission_number,branch_id)")
         .eq("period_month", month).eq("period_year", year);
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
-      if (user?.role === "dice_admin") q = q.eq("students.branch_id", user.branch_id);
+      const invBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      if (invBranch) q = q.eq("students.branch_id", invBranch);
       return (await q.order("invoice_number", {ascending:false})).data ?? [];
     },
   });
@@ -329,9 +331,13 @@ function PaymentsTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
-    queryKey:["payments-list"],
-    queryFn: async () => (await supabase.from("payments")
-      .select("*,students(first_name,last_name,admission_number)").order("payment_date",{ascending:false}).limit(50)).data??[],
+    queryKey:["payments-list", user?.role === "super_admin" ? activeBranch : user?.branch_id],
+    queryFn: async () => {
+      const branchP = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      let qP = supabase.from("payments").select("*,students(first_name,last_name,admission_number)").order("payment_date",{ascending:false}).limit(50);
+      if (branchP) qP = qP.eq("branch_id", branchP);
+      return (await qP).data??[];
+    },
   });
   return (
     <PageCard title="Payments" action={

@@ -42,14 +42,18 @@ function PortfolioPage() {
     enabled: user?.role === "parent",
   });
 
+  const portfolioBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data: artworks, isLoading } = useQuery({
-    queryKey: ["portfolio-artworks", user?.branch_id, studentFilter, viewMode],
+    queryKey: ["portfolio-artworks", portfolioBranch, studentFilter, viewMode],
     queryFn: async () => {
       let q = supabase.from("artwork_portfolio")
         .select("*,students(first_name,last_name,student_type)")
         .order("created_at", { ascending: false });
 
       if (viewMode === "shared") q = q.eq("is_shared", true);
+
+      // Always filter by branch (except parents who filter by child IDs)
+      if (user?.role !== "parent" && portfolioBranch) q = q.eq("branch_id", portfolioBranch);
 
       if (user?.role === "parent" && childIds) {
         q = q.in("student_id", childIds.length ? childIds : ["none"]);
