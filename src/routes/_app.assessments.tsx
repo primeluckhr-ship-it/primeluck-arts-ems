@@ -33,7 +33,8 @@ function gradeColor(g: string) {
 }
 
 function AssessmentsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
@@ -50,11 +51,17 @@ function AssessmentsPage() {
   });
 
   const { data } = useQuery({
-    queryKey: ["assessments-list", scopedIds.data],
+    queryKey: ["assessments-list", scopedIds.data, branch],
     enabled: scopedIds.isSuccess,
     queryFn: async () => {
       let q = supabase.from("assessments").select("*,students(first_name,last_name,admission_number,branch_id),courses(name)").order("assessment_date", { ascending: false });
-      if (scopedIds.data) q = q.in("student_id", scopedIds.data.length ? scopedIds.data : ["__none__"]);
+      if (scopedIds.data) {
+        // parent/student: filter by their specific student IDs
+        q = q.in("student_id", scopedIds.data.length ? scopedIds.data : ["__none__"]);
+      } else {
+        // admin/instructor: filter by branch
+        if (branch) q = q.eq("branch_id", branch);
+      }
       return (await q).data ?? [];
     },
   });
@@ -93,10 +100,11 @@ function AssessmentsPage() {
 }
 
 function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const { user } = useAuth();
-  const { data: students } = useQuery({ queryKey: ["assess-students", user?.branch_id], queryFn: async () => {
+  const { user, activeBranch } = useAuth();
+  const formBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+  const { data: students } = useQuery({ queryKey: ["assess-students", formBranch], queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name").eq("status","active");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      if (formBranch) q = q.eq("branch_id", formBranch);
       return (await q).data ?? [];
     } });
   const { data: courses } = useQuery({ queryKey: ["assess-courses", user?.branch_id], queryFn: async () => {
@@ -118,7 +126,7 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         grade: gradeFor(Number(form.score), Number(form.max_score) || 100),
       };
       if (!payload.course_id) delete payload.course_id;
-      await supabase.from("assessments").insert({...payload, instructor_id: user?.linked_entity_id || null}).throwOnError();
+      await supabase.from("assessments").insert({...payload, branch_id: formBranch, instructor_id: user?.linked_entity_id || null}).throwOnError();
       toast.success("Saved"); onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
