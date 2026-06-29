@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/portfolio")({ component: PortfolioPa
 const MEDIUMS = ["Pencil","Pen & Ink","Watercolour","Oil Paint","Acrylic","Charcoal","Pastel","Mixed Media","Digital","Sculpture","Collage"];
 
 function PortfolioPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [open, setOpen] = useState(false);
   const [studentFilter, setStudentFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"gallery"|"shared">("gallery");
