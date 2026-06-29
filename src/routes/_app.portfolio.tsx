@@ -22,11 +22,12 @@ function PortfolioPage() {
   const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role ?? "");
   const isInstructor = user?.role === "teacher" || user?.role === "instructor";
 
+  const portfolioBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data: students } = useQuery({
-    queryKey: ["students-portfolio", user?.branch_id],
+    queryKey: ["students-portfolio", portfolioBranch],
     queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name,student_type").eq("status","active").order("first_name");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      if (portfolioBranch) q = q.eq("branch_id", portfolioBranch);
       return (await q).data ?? [];
     },
     enabled: isAdmin || isInstructor,
@@ -42,7 +43,6 @@ function PortfolioPage() {
     enabled: user?.role === "parent",
   });
 
-  const portfolioBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data: artworks, isLoading } = useQuery({
     queryKey: ["portfolio-artworks", portfolioBranch, studentFilter, viewMode],
     queryFn: async () => {
@@ -240,7 +240,7 @@ function PortfolioPage() {
   );
 }
 
-function ArtworkForm({ students, onClose, onSaved }: { students: any[]; onClose: () => void; onSaved: () => void }) {
+function ArtworkForm({ students, branch, onClose, onSaved }: { students: any[]; branch: string; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
   const [form, setForm] = useState({ student_id: "", title: "", description: "", medium: "Watercolour", is_featured: false, is_shared: false });
   const [file, setFile] = useState<File | null>(null);
@@ -261,7 +261,7 @@ function ArtworkForm({ students, onClose, onSaved }: { students: any[]; onClose:
       let file_url = "";
       if (file) {
         const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `${user?.branch_id ?? "pla"}/${form.student_id}/${Date.now()}.${ext}`;
+        const path = `${branch || user?.branch_id || "pla"}/${form.student_id}/${Date.now()}.${ext}`;
         const { error: upErr, data: upData } = await supabase.storage.from("assets").upload(path, file, { upsert: true });
         if (!upErr) {
           file_url = supabase.storage.from("assets").getPublicUrl(path).data.publicUrl;
@@ -272,7 +272,7 @@ function ArtworkForm({ students, onClose, onSaved }: { students: any[]; onClose:
         file_url: file_url || undefined,
         file_type: "image",
         upload_date: new Date().toISOString().slice(0, 10),
-        branch_id: user?.branch_id ?? "",
+        branch_id: branch || user?.branch_id || "",
         instructor_id: user?.linked_entity_id || null,
       }).throwOnError();
       toast.success("Artwork added ✓");
