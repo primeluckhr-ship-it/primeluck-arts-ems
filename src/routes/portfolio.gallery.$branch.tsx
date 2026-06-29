@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
-export const Route = createFileRoute("/portfolio/gallery/")({ component: AcademyGallery });
+export const Route = createFileRoute("/portfolio/gallery/$branch")({ component: AcademyGallery });
 
 function AcademyGallery() {
   const { branch } = Route.useParams();

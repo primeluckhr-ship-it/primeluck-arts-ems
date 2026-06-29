@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
-export const Route = createFileRoute("/portfolio/student/")({ component: StudentPortfolio });
+export const Route = createFileRoute("/portfolio/student/$id")({ component: StudentPortfolio });
 
 function StudentPortfolio() {
   const { id } = Route.useParams();

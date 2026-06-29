@@ -36,9 +36,9 @@ import { Route as AppAttendanceRouteImport } from './routes/_app.attendance'
 import { Route as AppAssessmentsRouteImport } from './routes/_app.assessments'
 import { Route as AppAnnouncementsRouteImport } from './routes/_app.announcements'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
+import { Route as PortfolioStudentIdRouteImport } from './routes/portfolio.student.$id'
+import { Route as PortfolioGalleryBranchRouteImport } from './routes/portfolio.gallery.$branch'
 import { Route as AppStudentsIdRouteImport } from './routes/_app.students.$id'
-import { Route as PortfolioStudentRouteImport } from './routes/portfolio.student.'
-import { Route as PortfolioGalleryRouteImport } from './routes/portfolio.gallery.'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -174,20 +174,20 @@ const AppAccountRoute = AppAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppRoute,
 } as any)
+const PortfolioStudentIdRoute = PortfolioStudentIdRouteImport.update({
+  id: '/portfolio/student/$id',
+  path: '/portfolio/student/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortfolioGalleryBranchRoute = PortfolioGalleryBranchRouteImport.update({
+  id: '/portfolio/gallery/$branch',
+  path: '/portfolio/gallery/$branch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppStudentsIdRoute = AppStudentsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => AppStudentsRoute,
-} as any)
-const PortfolioStudentRoute = PortfolioStudentRouteImport.update({
-  id: '/portfolio/student/',
-  path: '/portfolio/student/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortfolioGalleryRoute = PortfolioGalleryRouteImport.update({
-  id: '/portfolio/gallery/',
-  path: '/portfolio/gallery/',
-  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -217,9 +217,9 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/students': typeof AppStudentsRouteWithChildren
   '/timetable': typeof AppTimetableRoute
-  '/portfolio/gallery/': typeof PortfolioGalleryRoute
-  '/portfolio/student/': typeof PortfolioStudentRoute
   '/students/$id': typeof AppStudentsIdRoute
+  '/portfolio/gallery/$branch': typeof PortfolioGalleryBranchRoute
+  '/portfolio/student/$id': typeof PortfolioStudentIdRoute
 }
 export interface FileRoutesByTo {
   '/feedback': typeof FeedbackRoute
@@ -248,9 +248,9 @@ export interface FileRoutesByTo {
   '/students': typeof AppStudentsRouteWithChildren
   '/timetable': typeof AppTimetableRoute
   '/': typeof AppIndexRoute
-  '/portfolio/gallery': typeof PortfolioGalleryRoute
-  '/portfolio/student': typeof PortfolioStudentRoute
   '/students/$id': typeof AppStudentsIdRoute
+  '/portfolio/gallery/$branch': typeof PortfolioGalleryBranchRoute
+  '/portfolio/student/$id': typeof PortfolioStudentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -281,9 +281,9 @@ export interface FileRoutesById {
   '/_app/students': typeof AppStudentsRouteWithChildren
   '/_app/timetable': typeof AppTimetableRoute
   '/_app/': typeof AppIndexRoute
-  '/portfolio/gallery/': typeof PortfolioGalleryRoute
-  '/portfolio/student/': typeof PortfolioStudentRoute
   '/_app/students/$id': typeof AppStudentsIdRoute
+  '/portfolio/gallery/$branch': typeof PortfolioGalleryBranchRoute
+  '/portfolio/student/$id': typeof PortfolioStudentIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -314,9 +314,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/students'
     | '/timetable'
-    | '/portfolio/gallery/'
-    | '/portfolio/student/'
     | '/students/$id'
+    | '/portfolio/gallery/$branch'
+    | '/portfolio/student/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/feedback'
@@ -345,9 +345,9 @@ export interface FileRouteTypes {
     | '/students'
     | '/timetable'
     | '/'
-    | '/portfolio/gallery'
-    | '/portfolio/student'
     | '/students/$id'
+    | '/portfolio/gallery/$branch'
+    | '/portfolio/student/$id'
   id:
     | '__root__'
     | '/_app'
@@ -377,17 +377,17 @@ export interface FileRouteTypes {
     | '/_app/students'
     | '/_app/timetable'
     | '/_app/'
-    | '/portfolio/gallery/'
-    | '/portfolio/student/'
     | '/_app/students/$id'
+    | '/portfolio/gallery/$branch'
+    | '/portfolio/student/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   FeedbackRoute: typeof FeedbackRoute
   LoginRoute: typeof LoginRoute
-  PortfolioGalleryRoute: typeof PortfolioGalleryRoute
-  PortfolioStudentRoute: typeof PortfolioStudentRoute
+  PortfolioGalleryBranchRoute: typeof PortfolioGalleryBranchRoute
+  PortfolioStudentIdRoute: typeof PortfolioStudentIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -581,26 +581,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAccountRouteImport
       parentRoute: typeof AppRoute
     }
+    '/portfolio/student/$id': {
+      id: '/portfolio/student/$id'
+      path: '/portfolio/student/$id'
+      fullPath: '/portfolio/student/$id'
+      preLoaderRoute: typeof PortfolioStudentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portfolio/gallery/$branch': {
+      id: '/portfolio/gallery/$branch'
+      path: '/portfolio/gallery/$branch'
+      fullPath: '/portfolio/gallery/$branch'
+      preLoaderRoute: typeof PortfolioGalleryBranchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/students/$id': {
       id: '/_app/students/$id'
       path: '/$id'
       fullPath: '/students/$id'
       preLoaderRoute: typeof AppStudentsIdRouteImport
       parentRoute: typeof AppStudentsRoute
-    }
-    '/portfolio/student/': {
-      id: '/portfolio/student/'
-      path: '/portfolio/student'
-      fullPath: '/portfolio/student/'
-      preLoaderRoute: typeof PortfolioStudentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portfolio/gallery/': {
-      id: '/portfolio/gallery/'
-      path: '/portfolio/gallery'
-      fullPath: '/portfolio/gallery/'
-      preLoaderRoute: typeof PortfolioGalleryRouteImport
-      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -677,8 +677,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   FeedbackRoute: FeedbackRoute,
   LoginRoute: LoginRoute,
-  PortfolioGalleryRoute: PortfolioGalleryRoute,
-  PortfolioStudentRoute: PortfolioStudentRoute,
+  PortfolioGalleryBranchRoute: PortfolioGalleryBranchRoute,
+  PortfolioStudentIdRoute: PortfolioStudentIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
