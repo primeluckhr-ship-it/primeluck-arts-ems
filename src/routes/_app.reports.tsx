@@ -44,10 +44,14 @@ function ReportsPage() {
 }
 
 function FinanceReport({ from, to }: { from: string; to: string }) {
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data } = useQuery({
-    queryKey: ["fin-report", from, to],
+    queryKey: ["fin-report", from, to, branch],
     queryFn: async () => {
-      const { data: payments } = await supabase.from("payments").select("*,students(first_name,last_name,admission_number)").gte("payment_date", from).lte("payment_date", to);
+      let pq = supabase.from("payments").select("*,students(first_name,last_name,admission_number)").gte("payment_date", from).lte("payment_date", to);
+      if (branch) pq = pq.eq("branch_id", branch);
+      const { data: payments } = await pq;
       const total = (payments ?? []).reduce((s, p: any) => s + Number(p.amount), 0);
       const byMethod: Record<string, number> = {};
       (payments ?? []).forEach((p: any) => { byMethod[p.payment_method] = (byMethod[p.payment_method] ?? 0) + Number(p.amount); });
@@ -126,8 +130,9 @@ function FinanceReport({ from, to }: { from: string; to: string }) {
 }
 
 function EnrollmentReport() {
+  const { user, activeBranch } = useAuth();
   const { data } = useQuery({
-    queryKey: ["enrol-report"],
+    queryKey: ["enrol-report", user?.role === "super_admin" ? activeBranch : user?.branch_id],
     queryFn: async () => {
       const branchRep = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       let sqRep = supabase.from("students").select("status,gender,skill_level,enrollment_date");
@@ -171,10 +176,16 @@ function EnrollmentReport() {
 }
 
 function AttendanceReport({ from, to }: { from: string; to: string }) {
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data } = useQuery({
-    queryKey: ["att-report", from, to, user?.branch_id],
+    queryKey: ["att-report", from, to, branch],
     queryFn: async () => {
-      const { data: records } = await supabase.from("attendance_records").select("status,session_id,sessions!inner(session_date,courses(name))").gte("sessions.session_date", from).lte("sessions.session_date", to);
+      let arq = supabase.from("attendance_records")
+        .select("status,session_id,student_id,sessions!inner(session_date,courses(name,branch_id))")
+        .gte("sessions.session_date", from).lte("sessions.session_date", to);
+      if (branch) arq = arq.eq("sessions.courses.branch_id", branch);
+      const { data: records } = await arq;
       const byStatus: Record<string, number> = {};
       (records ?? []).forEach((r: any) => { byStatus[r.status] = (byStatus[r.status] ?? 0) + 1; });
       const byCourse: Record<string, { present: number; total: number }> = {};
@@ -213,7 +224,7 @@ function AttendanceReport({ from, to }: { from: string; to: string }) {
 }
 
 function ExpenditureReportTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
 
@@ -221,14 +232,15 @@ function ExpenditureReportTab() {
   const monthEnd = new Date(year, month, 0).toISOString().slice(0,10);
 
   const { data: expenditures } = useQuery({
-    queryKey: ["exp-report", month, year, user?.branch_id],
+    queryKey: ["exp-report", month, year, user?.role === "super_admin" ? activeBranch : user?.branch_id],
     queryFn: async () => {
       let q = supabase.from("expenditures")
         .select("*")
         .gte("expense_date", monthStart)
         .lte("expense_date", monthEnd)
         .order("expense_date");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      const expBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      if (expBranch) q = q.eq("branch_id", expBranch);
       return (await q).data ?? [];
     },
   });
@@ -298,12 +310,13 @@ function ExpenditureReportTab() {
 }
 
 function CategoriesTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const catBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data: programs } = useQuery({
-    queryKey: ["programs-cat", user?.branch_id],
+    queryKey: ["programs-cat", catBranch],
     queryFn: async () => {
       let q = supabase.from("courses").select("id,name,category,billing_cycle,monthly_fee,term_fee,status");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      if (catBranch) q = q.eq("branch_id", catBranch);
       return (await q).data ?? [];
     },
   });
