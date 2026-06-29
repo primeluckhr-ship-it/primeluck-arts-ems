@@ -29,6 +29,7 @@ function FundRequestsPage() {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role??"");
+  const isInstructor = ["instructor","teacher"].includes(user?.role??"");
 
   const { data, isLoading } = useQuery({
     queryKey: ["fund-requests", user?.id, user?.role],
