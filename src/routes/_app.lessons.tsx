@@ -228,7 +228,7 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
   const [form, setForm] = useState({
     title: initial?.title ?? "",
     course_id: initial?.course_id ?? "",
-    instructor_id: initial?.instructor_id ?? "",
+    instructor_id: initial?.instructor_id ?? (user?.linked_entity_id || ""),
     lesson_date: initial?.lesson_date ?? new Date().toISOString().slice(0, 10),
     lesson_time: initial?.lesson_time ?? "09:00",
     duration_minutes: initial?.duration_minutes ?? 60,
@@ -243,6 +243,8 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiOpen, setAiOpen] = useState(!initial); // open by default for new plans
   const [requestMaterials, setRequestMaterials] = useState(false);
+  const [isProgressive, setIsProgressive] = useState(false);
+  const [sessionCount, setSessionCount] = useState(2);
   const [matItems, setMatItems] = useState<{ name: string; qty: string; cost: string }[]>([
     { name: "", qty: "1", cost: "" }
   ]);
@@ -330,6 +332,33 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
       } else {
         const { error, data: inserted } = await supabase.from("lesson_plans").insert(payload).select().single();
         if (error) throw error;
+        // Auto-create timetable session if lesson has a date and course
+        if (form.lesson_date && form.course_id) {
+          const { data: existing } = await supabase.from("sessions")
+            .select("id").eq("course_id", form.course_id).eq("session_date", form.lesson_date).limit(1);
+          if (!existing?.length) {
+            await supabase.from("sessions").insert({
+              course_id: form.course_id,
+              session_date: form.lesson_date,
+              start_time: form.lesson_time || null,
+              status: "scheduled",
+            });
+          }
+        }
+        // If progressive, create additional linked lesson plans
+        if (isProgressive && inserted && sessionCount > 1) {
+          for (let i = 1; i < sessionCount; i++) {
+            await supabase.from("lesson_plans").insert({
+              ...payload,
+              title: `${form.title} — Session ${i + 1} of ${sessionCount}`,
+              lesson_date: null, // Admin/instructor fills each date separately
+              session_id: null,
+              calendar_synced_at: null,
+              calendar_event_id: null,
+            });
+          }
+          toast.success(`${sessionCount} linked lesson plans created`);
+        }
         // Auto-create material fund request if requested
         if (requestMaterials && form.materials.trim() && inserted) {
           await supabase.from("fund_requests").insert({
@@ -681,7 +710,7 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
   const [form, setForm] = useState({
     student_id: initial?.student_id ?? "",
     course_id: initial?.course_id ?? "",
-    instructor_id: initial?.instructor_id ?? "",
+    instructor_id: initial?.instructor_id ?? (user?.linked_entity_id || ""),
     report_date: initial?.report_date ?? new Date().toISOString().slice(0, 10),
     period_label: initial?.period_label ?? "",
     attendance_sessions: initial?.attendance_sessions ?? 0,
