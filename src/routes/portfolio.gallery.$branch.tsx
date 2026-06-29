@@ -58,8 +58,8 @@ function AcademyGallery() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {works.map((a: any) => (
                 <div key={a.id} className="rounded-xl overflow-hidden bg-white/5 border border-white/10">
-                  {a.image_url ? (
-                    <img src={a.image_url} alt={a.title} className="w-full aspect-square object-cover"/>
+                  {a.file_url ? (
+                    <img src={a.file_url} alt={a.title} className="w-full aspect-square object-cover"/>
                   ) : (
                     <div className="w-full aspect-square flex items-center justify-center text-white/20 text-3xl">🎨</div>
                   )}

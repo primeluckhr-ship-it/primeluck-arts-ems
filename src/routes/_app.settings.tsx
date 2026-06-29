@@ -22,7 +22,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 function SettingsPage() {
-  const [tab, setTab] = useState<"users"|"institutions"|"terms">("users");
+  const [tab, setTab] = useState<"users"|"institutions"|"terms"|"branches">("users");
   const { user } = useAuth();
   if (user?.role !== "super_admin") return <div className="p-8 text-center text-muted-foreground">Access denied</div>;
   return (
@@ -30,6 +30,7 @@ function SettingsPage() {
       <div className="flex gap-1 border-b border-border">
         {([
           { key:"users",        icon:<Users className="size-4"/>,       label:"Users" },
+          { key:"branches",     icon:<Building2 className="size-4"/>,   label:"Branches / Academies" },
           { key:"institutions", icon:<Building2 className="size-4"/>,   label:"Institutions" },
           { key:"terms",        icon:<CalendarRange className="size-4"/>,label:"Terms" },
         ] as const).map((t) => (
@@ -42,6 +43,7 @@ function SettingsPage() {
       {tab==="users"        && <UsersTab />}
       {tab==="institutions" && <InstitutionsTab />}
       {tab==="terms"        && <TermsTab />}
+      {tab==="branches"     && <BranchesTab />}
     </div>
   );
 }
@@ -326,5 +328,175 @@ function TermsTab() {
         ))}
       </div>
     </PageCard>
+  );
+}
+
+// ── Branches / Academies Tab ──────────────────────────────────────────────
+function BranchesTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [showNew, setShowNew] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    name: "", id_slug: "", address: "", city: "Nairobi", phone: "", email: "",
+    admin_email: "", admin_password: "", copy_from: "branch-1",
+  });
+
+  const { data: branches } = useQuery({
+    queryKey: ["branches-all"],
+    queryFn: async () => (await supabase.from("branches").select("*").order("created_at")).data ?? [],
+  });
+
+  function slugify(name: string) {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  }
+
+  async function createBranch() {
+    if (!form.name || !form.id_slug || !form.admin_email || !form.admin_password) {
+      toast.error("Fill in all required fields"); return;
+    }
+    setCreating(true);
+    try {
+      // 1. Create branch
+      const { error: brErr } = await supabase.from("branches").insert({
+        id: form.id_slug, name: form.name, address: form.address,
+        city: form.city, phone: form.phone, email: form.email, status: "active",
+      });
+      if (brErr) throw brErr;
+
+      // 2. Copy courses from source branch
+      if (form.copy_from) {
+        const { data: srcCourses } = await supabase.from("courses")
+          .select("name,category,schedule_days,start_time,end_time,billing_type,status")
+          .eq("branch_id", form.copy_from);
+        if (srcCourses?.length) {
+          await supabase.from("courses").insert(
+            srcCourses.map((c: any) => ({ ...c, branch_id: form.id_slug, instructor_id: null }))
+          );
+        }
+      }
+
+      // 3. Create admin user for new branch
+      const { crypto: cr } = window;
+      const hashBuf = await cr.subtle.digest("SHA-256", new TextEncoder().encode(form.admin_password));
+      const hashHex = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,"0")).join("");
+      const { error: uErr } = await supabase.from("users").insert({
+        email: form.admin_email.toLowerCase(),
+        password_hash: hashHex,
+        role: "finance_admin",
+        branch_id: form.id_slug,
+        full_name: `${form.name} Admin`,
+      });
+      if (uErr) throw uErr;
+
+      toast.success(`"${form.name}" branch created with admin user and courses copied!`);
+      qc.invalidateQueries({ queryKey: ["branches-all"] });
+      setShowNew(false);
+      setForm({ name:"", id_slug:"", address:"", city:"Nairobi", phone:"", email:"", admin_email:"", admin_password:"", copy_from:"branch-1" });
+    } catch (e: any) {
+      toast.error("Error: " + e.message);
+    } finally { setCreating(false); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <PageCard title="Academies & Branches" action={
+        <button onClick={() => setShowNew(!showNew)}
+          className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium">
+          <Plus className="size-4"/>New Branch
+        </button>
+      }>
+        {/* Existing branches */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(branches ?? []).map((b: any) => (
+            <div key={b.id} className="rounded-xl border border-border p-4 space-y-1">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">{b.name}</h3>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${b.status === "active" ? "bg-success/10 text-success border-success/20" : "bg-muted text-muted-foreground border-border"}`}>
+                  {b.status}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">{b.address}, {b.city}</p>
+              <p className="text-xs text-muted-foreground">{b.email} · {b.phone}</p>
+              <p className="text-[10px] text-muted-foreground/50 font-mono mt-1">ID: {b.id}</p>
+            </div>
+          ))}
+        </div>
+      </PageCard>
+
+      {/* New branch form */}
+      {showNew && (
+        <PageCard title="Set Up New Branch">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Academy Name *</label>
+              <input value={form.name} onChange={e => {
+                const name = e.target.value;
+                setForm({...form, name, id_slug: slugify(name)});
+              }} placeholder="e.g. Westlands Arts Academy"
+                className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Branch ID (auto) *</label>
+              <input value={form.id_slug} onChange={e => setForm({...form, id_slug: e.target.value})}
+                placeholder="westlands-arts" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm font-mono"/>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">City</label>
+              <input value={form.city} onChange={e => setForm({...form, city: e.target.value})}
+                className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Address</label>
+              <input value={form.address} onChange={e => setForm({...form, address: e.target.value})}
+                placeholder="Street, Area" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Phone</label>
+              <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})}
+                placeholder="+2547…" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Academy Email</label>
+              <input value={form.email} onChange={e => setForm({...form, email: e.target.value})}
+                placeholder="info@newacademy.ke" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+            </div>
+            <div className="sm:col-span-2 border-t border-border pt-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-3">Admin Account for New Branch</p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Admin Email *</label>
+                  <input value={form.admin_email} onChange={e => setForm({...form, admin_email: e.target.value})}
+                    placeholder="admin@newacademy.ke" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Admin Password *</label>
+                  <input type="password" value={form.admin_password} onChange={e => setForm({...form, admin_password: e.target.value})}
+                    placeholder="min 6 characters" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+                </div>
+              </div>
+            </div>
+            <div className="sm:col-span-2 border-t border-border pt-3">
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Copy course structure from</label>
+              <select value={form.copy_from} onChange={e => setForm({...form, copy_from: e.target.value})}
+                className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
+                <option value="">— Start fresh (no courses) —</option>
+                {(branches ?? []).map((b: any) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">Courses are copied as templates — no students, no data, just the course structure.</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-border">
+            <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+            <button onClick={createBranch} disabled={creating}
+              className="px-6 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50 flex items-center gap-2">
+              {creating ? "Creating…" : "🏛️ Create Branch"}
+            </button>
+          </div>
+        </PageCard>
+      )}
+    </div>
   );
 }

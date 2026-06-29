@@ -43,8 +43,8 @@ function StudentPortfolio() {
           <div className="columns-2 sm:columns-3 gap-3 space-y-3">
             {(artworks ?? []).map((a: any) => (
               <div key={a.id} className="break-inside-avoid rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
-                {a.image_url ? (
-                  <img src={a.image_url} alt={a.title} className="w-full object-cover"/>
+                {a.file_url ? (
+                  <img src={a.file_url} alt={a.title} className="w-full object-cover"/>
                 ) : (
                   <div className="w-full aspect-square flex items-center justify-center text-white/20 text-4xl">🎨</div>
                 )}
