@@ -332,19 +332,8 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
       } else {
         const { error, data: inserted } = await supabase.from("lesson_plans").insert(payload).select().single();
         if (error) throw error;
-        // Auto-create timetable session if lesson has a date and course
-        if (form.lesson_date && form.course_id) {
-          const { data: existing } = await supabase.from("sessions")
-            .select("id").eq("course_id", form.course_id).eq("session_date", form.lesson_date).limit(1);
-          if (!existing?.length) {
-            await supabase.from("sessions").insert({
-              course_id: form.course_id,
-              session_date: form.lesson_date,
-              start_time: form.lesson_time || null,
-              status: "scheduled",
-            });
-          }
-        }
+        // DB trigger handles auto-session creation — no frontend action needed
+        // (trigger: lesson_plan_creates_session fires AFTER INSERT on lesson_plans)
         // If progressive, create additional linked lesson plans
         if (isProgressive && inserted && sessionCount > 1) {
           for (let i = 1; i < sessionCount; i++) {
