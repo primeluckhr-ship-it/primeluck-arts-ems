@@ -82,34 +82,48 @@ function AttendancePage() {
     return <AttendanceSheet session={selectedSession} onBack={() => setSelectedSession(null)} />;
   }
 
-  const todaySessions = (sessions??[]).filter((s:any) => s.session_date === today);
-  const otherSessions = (sessions??[]).filter((s:any) => s.session_date !== today);
+  const todaySessions  = (sessions??[]).filter((s:any) => s.session_date === today);
+  const upcomingSessions = (sessions??[]).filter((s:any) => s.session_date > today).sort((a:any,b:any) => a.session_date.localeCompare(b.session_date));
+  const pastSessions   = (sessions??[]).filter((s:any) => s.session_date < today).slice(0,15);
 
   return (
     <div className="space-y-4">
+      {/* Today */}
       {todaySessions.length > 0 && (
         <PageCard title="Today's Sessions" subtitle={format(new Date(),"EEEE, d MMMM yyyy")}>
           <div className="space-y-2">
-            {todaySessions.map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)} isAdmin={isAdmin} onDelete={(e) => deleteSession(s, e)}/>)}
+            {todaySessions.map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)} isAdmin={isAdmin} onDelete={(e) => deleteSession(s, e)} active/>)}
           </div>
         </PageCard>
       )}
-      <PageCard title={todaySessions.length?"Recent Sessions":"All Sessions"}>
+      {/* Upcoming */}
+      {upcomingSessions.length > 0 && (
+        <PageCard title="Upcoming Sessions" subtitle="Scheduled — attendance opens on the day">
+          <div className="space-y-2">
+            {upcomingSessions.map((s:any) => (
+              <SessionRow key={s.id} session={s} onClick={() => {}} isAdmin={isAdmin}
+                onDelete={(e) => deleteSession(s, e)} upcoming/>
+            ))}
+          </div>
+        </PageCard>
+      )}
+      {/* Past */}
+      <PageCard title={todaySessions.length || upcomingSessions.length ? "Past Sessions" : "All Sessions"}>
         {isLoading && <p className="py-6 text-center text-muted-foreground">Loading…</p>}
         <div className="space-y-2">
-          {otherSessions.slice(0,20).map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)} isAdmin={isAdmin} onDelete={(e) => deleteSession(s, e)}/>)}
-          {!isLoading && !sessions?.length && <p className="py-8 text-center text-muted-foreground">No sessions found</p>}
+          {pastSessions.map((s:any) => <SessionRow key={s.id} session={s} onClick={() => setSelectedSession(s)} isAdmin={isAdmin} onDelete={(e) => deleteSession(s, e)}/>)}
+          {!isLoading && !sessions?.length && <p className="py-8 text-center text-muted-foreground">No sessions scheduled yet — add sessions from Timetable</p>}
         </div>
       </PageCard>
     </div>
   );
 }
 
-function SessionRow({ session, onClick, isAdmin, onDelete }:{ session:any; onClick:()=>void; isAdmin?: boolean; onDelete?: (e: React.MouseEvent) => void }) {
+function SessionRow({ session, onClick, isAdmin, onDelete, active, upcoming }:{ session:any; onClick:()=>void; isAdmin?: boolean; onDelete?: (e: React.MouseEvent) => void; active?: boolean; upcoming?: boolean; }) {
   const cfg = STATUS_CONFIG[session.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.present;
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border hover:bg-muted/40 transition-colors">
-      <button onClick={onClick} className="flex-1 flex items-center justify-between gap-3 p-3 text-left">
+      <button onClick={upcoming ? undefined : onClick} className={`flex-1 flex items-center justify-between gap-3 p-3 text-left ${upcoming ? "cursor-default opacity-70" : "cursor-pointer"}`}>
         <div className="flex items-center gap-3">
           <CalendarCheck className="size-5 text-accent shrink-0"/>
           <div>
