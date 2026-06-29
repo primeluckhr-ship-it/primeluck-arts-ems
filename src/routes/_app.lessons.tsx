@@ -706,7 +706,11 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     setPhotos(p => p.filter((_, i) => i !== idx));
   }
 
-  const { data: students } = useQuery({ queryKey:["students-active"], queryFn: async () => (await supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name")).data ?? [] });
+  const { data: students } = useQuery({ queryKey:["students-active", formBranch], queryFn: async () => {
+    let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name");
+    if (formBranch) q = q.eq("branch_id", formBranch);
+    return (await q).data ?? [];
+  }});
   const { data: courses }   = useQuery({ queryKey:["courses-list"],   queryFn: async () => (await supabase.from("courses").select("id,name").order("name")).data ?? [] });
   const { data: instructors } = useQuery({ queryKey:["instructors-active"], queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").order("first_name")).data ?? [] });
 

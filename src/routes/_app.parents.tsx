@@ -134,8 +134,12 @@ function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>voi
   const [saving, setSaving] = useState(false);
 
   const { data: students } = useQuery({
-    queryKey:["students-active"],
-    queryFn: async () => (await supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name")).data??[],
+    queryKey:["students-active", branch],
+    queryFn: async () => {
+      let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name");
+      if (branch) q = q.eq("branch_id", branch);
+      return (await q).data??[];
+    },
   });
   const [linkedStudents, setLinkedStudents] = useState<string[]>(
     initial?.student_parents?.map((sp:any)=>sp.students?.id).filter(Boolean)??[]

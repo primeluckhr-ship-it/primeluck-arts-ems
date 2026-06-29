@@ -172,8 +172,9 @@ function InvoicesTab() {
   async function bulkGenerate() {
     setGenerating(true);
     try {
+      const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       let q = supabase.from("students").select("id,first_name,last_name,branch_id").eq("status","active");
-      if (user?.role === "dice_admin") q = q.eq("branch_id", user.branch_id);
+      if (branch) q = q.eq("branch_id", branch);
       const { data: students } = await q;
       const { data: existing } = await supabase.from("invoices").select("student_id")
         .eq("period_month", month).eq("period_year", year).eq("billing_type","monthly");
@@ -268,8 +269,9 @@ function TermlyGenerator({ onGenerated }:{ onGenerated:()=>void }) {
     setGenerating(true);
     try {
       const term = (terms??[]).find((t:any) => t.id === termId);
+      const branchFin = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       let q = supabase.from("students").select("id,first_name,last_name,student_type").eq("status","active").eq("student_type", typeFilter);
-      if (user?.role === "dice_admin") q = q.eq("branch_id", user.branch_id);
+      if (branchFin) q = q.eq("branch_id", branchFin);
       const { data: students } = await q;
       const { data: existing } = await supabase.from("invoices").select("student_id").eq("term_id", termId).eq("billing_type","termly");
       const existingIds = new Set((existing??[]).map((e:any) => e.student_id));
@@ -367,8 +369,9 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
   const { data: students } = useQuery({
     queryKey:["students-active"],
     queryFn: async () => {
+      const branchPay = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active");
-      if (user?.role==="dice_admin") q = q.eq("branch_id", user.branch_id);
+      if (branchPay) q = q.eq("branch_id", branchPay);
       return (await q.order("first_name")).data??[];
     },
   });

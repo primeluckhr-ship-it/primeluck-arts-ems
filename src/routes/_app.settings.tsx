@@ -115,7 +115,10 @@ function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void;
         return (data??[]).map((p:any) => ({ id: p.id, label: `${p.first_name} ${p.last_name}` }));
       }
       if (form.role === "student") {
-        const { data } = await supabase.from("students").select("id,first_name,last_name,admission_number").order("first_name");
+        const branchSet = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+        let sq = supabase.from("students").select("id,first_name,last_name,admission_number").order("first_name");
+        if (branchSet) sq = sq.eq("branch_id", branchSet);
+        const { data } = await sq;
         return (data??[]).map((s:any) => ({ id: s.id, label: `${s.first_name} ${s.last_name} (${s.admission_number})` }));
       }
       return [];

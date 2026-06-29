@@ -129,7 +129,10 @@ function EnrollmentReport() {
   const { data } = useQuery({
     queryKey: ["enrol-report"],
     queryFn: async () => {
-      const { data: students } = await supabase.from("students").select("status,gender,skill_level,enrollment_date");
+      const branchRep = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+      let sqRep = supabase.from("students").select("status,gender,skill_level,enrollment_date");
+      if (branchRep) sqRep = sqRep.eq("branch_id", branchRep);
+      const { data: students } = await sqRep;
       const byStatus: Record<string, number> = {}, byLevel: Record<string, number> = {}, byMonth: Record<string, number> = {};
       (students ?? []).forEach((s: any) => {
         byStatus[s.status] = (byStatus[s.status] ?? 0) + 1;
