@@ -146,7 +146,7 @@ function GoogleCalendarSync({ plan }: { plan: any }) {
   const { user } = useAuth();
   const isDice = (plan.courses?.branch_id ?? user?.branch_id) === "dice-arts-nairobi";
   const academyName  = isDice ? "Dice Arts Academy"    : "PrimeLuck Arts Academy";
-  const academyEmail = isDice ? "dicearts.academy@gmail.com" : "admin@primeluck.ac.ke";
+  const academyEmail = isDice ? "dicearts.academy@gmail.com" : "primeluck.hr@gmail.com";
 
   function syncToCalendar() {
     if (!plan.lesson_date) { toast.error("Set a lesson date first"); return; }
@@ -438,6 +438,7 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
             </select>
           </Field>
           <Field label="Date"><Input type="date" value={form.lesson_date} onChange={(v) => setForm({...form,lesson_date:v})}/></Field>
+          <Field label="Start Time"><Input type="time" value={form.lesson_time} onChange={(v) => setForm({...form,lesson_time:v})}/></Field>
           <Field label="Duration (minutes)"><Input type="number" value={String(form.duration_minutes)} onChange={(v) => setForm({...form,duration_minutes:Number(v)})}/></Field>
           <TA label="Learning Objectives" field="objectives" form={form} setForm={setForm}/>
           <TA label="Materials Needed" field="materials" form={form} setForm={setForm}/>
