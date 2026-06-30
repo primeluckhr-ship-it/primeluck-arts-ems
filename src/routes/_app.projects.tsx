@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
 import { formatKES } from "@/lib/pla";
-import { Plus, Pencil, Target, CheckCircle2, Clock, Circle } from "lucide-react";
+import { Plus, Pencil, Target, CheckCircle2, Clock, Circle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
 
@@ -47,7 +47,22 @@ function ProjectsPage() {
     },
   });
 
-  if (selected) return <ProjectDetail project={selected} onBack={() => setSelected(null)} />;
+  async function deleteProject(p: any, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete "${p.title}" permanently? This cannot be undone.`)) return;
+    try {
+      const { error } = await supabase.from("projects").delete().eq("id", p.id);
+      if (error) throw error;
+      logAudit({ user_id: user?.id, branch_id: p.branch_id, action: "DELETE", entity_type: "project", entity_id: p.id, description: `${CATEGORY_LABELS[p.category] ?? "Project"} deleted: "${p.title}"` });
+      toast.success(`"${p.title}" deleted`);
+      qc.invalidateQueries({ queryKey: ["projects-list"] });
+      if (selected?.id === p.id) setSelected(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete");
+    }
+  }
+
+  if (selected) return <ProjectDetail project={selected} onBack={() => setSelected(null)} onDelete={(e:React.MouseEvent) => deleteProject(selected, e)} />;
 
   const active    = (projects ?? []).filter((p: any) => p.status === "active");
   const planning  = (projects ?? []).filter((p: any) => p.status === "planning");
@@ -90,6 +105,8 @@ function ProjectsPage() {
                   <Badge className={STATUS_COLORS[p.status]}>{p.status}</Badge>
                   <button onClick={(e) => { e.stopPropagation(); setEditing(p); setOpen(true); }}
                     className="p-1 rounded hover:bg-muted"><Pencil className="size-3"/></button>
+                  <button onClick={(e) => deleteProject(p, e)}
+                    className="p-1 rounded hover:bg-danger/15 text-muted-foreground hover:text-danger"><Trash2 className="size-3"/></button>
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">{CATEGORY_LABELS[p.category] ?? p.category}</div>
@@ -122,7 +139,7 @@ function ProjectsPage() {
   );
 }
 
-function ProjectDetail({ project, onBack }: { project: any; onBack: () => void }) {
+function ProjectDetail({ project, onBack, onDelete }: { project: any; onBack: () => void; onDelete?: (e: React.MouseEvent) => void }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [openMilestone, setOpenMilestone] = useState(false);
@@ -166,6 +183,12 @@ function ProjectDetail({ project, onBack }: { project: any; onBack: () => void }
             <span className="text-xs text-muted-foreground">{CATEGORY_LABELS[project.category]}</span>
           </div>
         </div>
+        {onDelete && (
+          <button onClick={onDelete}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-danger/30 text-danger text-xs font-medium hover:bg-danger/10">
+            <Trash2 className="size-3.5"/>Delete
+          </button>
+        )}
       </div>
 
       {project.description && (
