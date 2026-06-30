@@ -1,0 +1,36 @@
+name: Supabase Keep-Alive
+
+# Prevents the free-tier Supabase project from auto-pausing after
+# 7 days of zero database activity. Runs every 2 days — well inside
+# that window — and performs a genuine, lightweight read query against
+# the database (counting branches), which resets the inactivity timer.
+#
+# Manual trigger available via the Actions tab ("Run workflow") if you
+# ever need to wake the project on demand.
+
+on:
+  schedule:
+    - cron: "0 6 */2 * *"   # 06:00 UTC, every 2 days
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase database
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            "https://xgwfodwaczyrnxagyzhl.supabase.co/rest/v1/branches?select=id&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhnd2ZvZHdhY3p5cm54YWd5emhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMTk3MjksImV4cCI6MjA5NzY5NTcyOX0.5WYZgeUA6eVw9EOzu9qlA_FUKVIARnfcTDb8VyKNM7M" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhnd2ZvZHdhY3p5cm54YWd5emhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMTk3MjksImV4cCI6MjA5NzY5NTcyOX0.5WYZgeUA6eVw9EOzu9qlA_FUKVIARnfcTDb8VyKNM7M")
+
+          echo "HTTP status: $response"
+          cat /tmp/response.json
+          echo ""
+
+          if [ "$response" -ne 200 ]; then
+            echo "::error::Supabase ping failed with status $response"
+            exit 1
+          fi
+
+          echo "✅ Supabase project pinged successfully — inactivity timer reset."
