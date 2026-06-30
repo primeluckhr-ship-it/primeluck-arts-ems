@@ -185,8 +185,12 @@ function InvoicesTab() {
       if (!newOnes.length) { toast.info("All invoices already generated"); return; }
       const rows = await Promise.all(newOnes.map(async (s:any) => {
         const { data: enr } = await supabase.from("course_enrollments")
-          .select("courses(programs(monthly_fee))").eq("student_id", s.id);
-        const total = (enr??[]).reduce((sum:number,e:any) => sum + Number(e.courses?.programs?.monthly_fee??0), 0);
+          .select("fee_override,courses(monthly_fee,programs(monthly_fee))").eq("student_id", s.id);
+        const total = (enr??[]).reduce((sum:number,e:any) => {
+          if (e.fee_override) return sum + Number(e.fee_override);
+          const courseFee = e.courses?.monthly_fee ?? e.courses?.programs?.monthly_fee ?? 0;
+          return sum + Number(courseFee);
+        }, 0);
         return {
           invoice_number: generateInvoiceNumber(year, month),
           student_id: s.id, period_month: month, period_year: year,
@@ -281,11 +285,14 @@ function TermlyGenerator({ onGenerated }:{ onGenerated:()=>void }) {
       if (!newOnes.length) { toast.info("Already generated for this group"); return; }
       const rows = await Promise.all(newOnes.map(async (s:any) => {
         const { data: enr } = await supabase.from("course_enrollments")
-          .select("fee_override,courses(programs(term_fee,monthly_fee,billing_cycle))").eq("student_id", s.id);
+          .select("fee_override,courses(term_fee,monthly_fee,billing_cycle,programs(term_fee,monthly_fee,billing_cycle))").eq("student_id", s.id);
         const total = (enr??[]).reduce((sum:number,e:any) => {
           if (e.fee_override) return sum + Number(e.fee_override);
-          const p = e.courses?.programs;
-          return sum + Number(p?.billing_cycle==="termly" ? p?.term_fee : (p?.monthly_fee??0)*3);
+          const c = e.courses;
+          const cycle = c?.billing_cycle ?? c?.programs?.billing_cycle;
+          const termFee = c?.term_fee ?? c?.programs?.term_fee;
+          const monthlyFee = c?.monthly_fee ?? c?.programs?.monthly_fee ?? 0;
+          return sum + Number(cycle === "termly" ? termFee : monthlyFee * 3);
         }, 0);
         const n = new Date();
         return {

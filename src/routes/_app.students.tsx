@@ -299,6 +299,9 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
   const [selectedCourseId, setSelectedCourseId] = useState(
     initial?.course_enrollments?.find((e: any) => e.status === "active")?.course_id ?? ""
   );
+  const [feeOverride, setFeeOverride] = useState<string>(
+    initial?.course_enrollments?.find((e: any) => e.status === "active")?.fee_override?.toString() ?? ""
+  );
 
   const branchForLookup = targetBranch;
 
@@ -310,9 +313,15 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
 
   const { data: courses } = useQuery({
     queryKey: ["courses-active", branchForLookup],
-    queryFn: async () => (await supabase.from("courses").select("id,name")
+    queryFn: async () => (await supabase.from("courses").select("id,name,monthly_fee,term_fee,session_fee,billing_cycle")
       .eq("status", "active").eq("branch_id", branchForLookup).order("name")).data ?? [],
   });
+  const selectedCourse = (courses ?? []).find((c: any) => c.id === selectedCourseId);
+  const standardFee = selectedCourse
+    ? (selectedCourse.billing_cycle === "monthly" ? selectedCourse.monthly_fee
+       : selectedCourse.billing_cycle === "per_session" ? selectedCourse.session_fee
+       : selectedCourse.term_fee)
+    : null;
 
   async function save() {
     if (!form.first_name.trim()) { toast.error("First name is required"); return; }
@@ -342,12 +351,18 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
         // Update course enrollment if changed
         if (selectedCourseId) {
           const existing = initial.course_enrollments?.find((e: any) => e.status === "active");
+          const overrideVal = feeOverride.trim() ? Number(feeOverride) : null;
           if (!existing || existing.course_id !== selectedCourseId) {
             if (existing) await supabase.from("course_enrollments").update({ status: "inactive" }).eq("course_id", existing.course_id).eq("student_id", initial.id);
             await supabase.from("course_enrollments").upsert({
               student_id: initial.id, course_id: selectedCourseId,
               status: "active", enrollment_date: form.enrollment_date || new Date().toISOString().slice(0, 10),
+              fee_override: overrideVal,
             }, { onConflict: "student_id,course_id" });
+          } else {
+            // Same course — just update the fee override if it changed
+            await supabase.from("course_enrollments").update({ fee_override: overrideVal })
+              .eq("course_id", selectedCourseId).eq("student_id", initial.id);
           }
         }
         toast.success("Student updated");
@@ -364,6 +379,7 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
           await supabase.from("course_enrollments").insert({
             student_id: inserted.id, course_id: enrollCourseId,
             status: "active", enrollment_date: form.enrollment_date || new Date().toISOString().slice(0, 10),
+            fee_override: feeOverride.trim() ? Number(feeOverride) : null,
           });
         }
         await logAudit({
@@ -432,6 +448,28 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
               {(courses ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <p className="text-xs text-muted-foreground mt-1">Student will appear in this course's attendance sessions</p>
+
+            {selectedCourseId && (
+              <div className="mt-3 rounded-lg border border-accent/20 bg-accent/5 p-3">
+                <p className="text-xs font-medium mb-1.5">💰 Custom Fee for this student</p>
+                <div className="flex items-center gap-3">
+                  <input type="number" value={feeOverride} onChange={(e) => setFeeOverride(e.target.value)}
+                    placeholder={standardFee ? `Standard: KES ${Number(standardFee).toLocaleString()}` : "No standard fee set"}
+                    className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm"/>
+                  {feeOverride.trim() && (
+                    <button type="button" onClick={() => setFeeOverride("")}
+                      className="text-xs text-muted-foreground hover:text-foreground underline shrink-0">
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {feeOverride.trim()
+                    ? `This student will be billed KES ${Number(feeOverride).toLocaleString()} instead of the standard fee.`
+                    : "Leave blank to use the course's standard fee for this student."}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
