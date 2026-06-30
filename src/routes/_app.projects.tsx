@@ -28,18 +28,20 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function ProjectsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [selected, setSelected] = useState<any>(null);
   const qc = useQueryClient();
+  const projectBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
 
   const { data: projects, isLoading } = useQuery({
-    queryKey: ["projects-list", user?.branch_id],
+    queryKey: ["projects-list", projectBranch],
     queryFn: async () => {
+      if (!projectBranch) return [];
       const { data } = await supabase.from("projects")
         .select("*,instructors(first_name,last_name),dice_institutions(name)")
-        .eq("branch_id", user?.branch_id ?? "")
+        .eq("branch_id", projectBranch)
         .order("created_at", { ascending: false });
       return data ?? [];
     },
@@ -234,9 +236,9 @@ function ProjectDetail({ project, onBack }: { project: any; onBack: () => void }
   );
 }
 
-function ProjectForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
+function ProjectForm({ initial, branch, onClose, onSaved }: { initial: any; branch: string; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
-  const isDice = user?.branch_id === "dice-arts-nairobi";
+  const isDice = branch === "dice-arts-nairobi";
 
   const [form, setForm] = useState({
     title: initial?.title ?? "",
@@ -253,20 +255,20 @@ function ProjectForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
   const [saving, setSaving] = useState(false);
 
   const { data: instructors } = useQuery({
-    queryKey: ["instructors-list"],
-    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").order("first_name")).data ?? [],
+    queryKey: ["instructors-list-proj", branch],
+    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", branch).order("first_name")).data ?? [],
   });
   const { data: diceInstitutions } = useQuery({
-    queryKey: ["dice-institutions"],
+    queryKey: ["dice-institutions", branch],
     enabled: isDice,
-    queryFn: async () => (await supabase.from("dice_institutions").select("id,name").eq("is_active",true).order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("dice_institutions").select("id,name").eq("is_active",true).eq("branch_id", branch).order("name")).data ?? [],
   });
 
   async function save() {
     if (!form.title) { toast.error("Title required"); return; }
     setSaving(true);
     try {
-      const payload = { ...form, branch_id: user?.branch_id ?? "", created_by: user?.id,
+      const payload = { ...form, branch_id: branch, created_by: user?.id,
         budget: form.budget ? Number(form.budget) : null,
         lead_instructor_id: form.lead_instructor_id || null,
         dice_institution_id: form.dice_institution_id || null,

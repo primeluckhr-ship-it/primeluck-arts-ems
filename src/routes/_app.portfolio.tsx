@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard } from "@/components/app-shell";
-import { Plus, Share2, ImageIcon, Star, Upload, X, ExternalLink, Link2, Copy } from "lucide-react";
+import { Plus, Share2, ImageIcon, Star, Upload, X, ExternalLink, Link2, Copy, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Field, Input } from "./_app.students";
@@ -72,6 +72,25 @@ function PortfolioPage() {
     await supabase.from("artwork_portfolio").update({ is_shared: !current }).eq("id", id);
     qc.invalidateQueries({ queryKey: ["portfolio-artworks"] });
     toast.success(current ? "Artwork hidden from shared view" : "Artwork shared ✓");
+  }
+
+  async function deleteArtwork(id: string, fileUrl?: string) {
+    if (!confirm("Delete this artwork permanently? This cannot be undone.")) return;
+    try {
+      // Remove from storage if it's a Supabase-hosted file
+      if (fileUrl?.includes("/storage/v1/object/public/")) {
+        const path = fileUrl.split("/storage/v1/object/public/")[1];
+        const [bucket, ...rest] = path.split("/");
+        await supabase.storage.from(bucket).remove([rest.join("/")]);
+      }
+      const { error } = await supabase.from("artwork_portfolio").delete().eq("id", id);
+      if (error) throw error;
+      logAudit({ user_id: user?.id, branch_id: portfolioBranch, action: "DELETE", entity_type: "artwork", entity_id: id, description: "Artwork deleted from portfolio" });
+      toast.success("Artwork deleted");
+      qc.invalidateQueries({ queryKey: ["portfolio-artworks"] });
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete artwork");
+    }
   }
 
   async function toggleFeatured(id: string, current: boolean) {
@@ -229,6 +248,12 @@ function PortfolioPage() {
                             className={`size-6 rounded flex items-center justify-center ${a.is_shared ? "text-accent" : "text-white/60 hover:text-accent"}`}>
                             <Share2 className="size-3.5"/>
                           </button>
+                          {isAdmin && (
+                            <button onClick={() => deleteArtwork(a.id, a.file_url)} title="Delete artwork"
+                              className="size-6 rounded flex items-center justify-center text-white/60 hover:text-danger">
+                              <Trash2 className="size-3.5"/>
+                            </button>
+                          )}
                         </>
                       )}
                       {a.file_url && (
