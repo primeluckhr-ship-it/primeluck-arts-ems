@@ -574,13 +574,13 @@ function ExpenditureTab() {
           </tbody>
         </table>
       </PageCard>
-      {open && <ExpForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["expenditures-list"]}); }}/>}
+      {open && <ExpForm branch={branchId} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["expenditures-list"]}); }}/>}
     </div>
   );
 }
 
-function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
-  const { user, activeBranch } = useAuth();
+function ExpForm({ branch, onClose, onSaved }:{ branch:string; onClose:()=>void; onSaved:()=>void }) {
+  const { user } = useAuth();
   const [form, setForm] = useState({ category:"", description:"", amount:"", expense_date: new Date().toISOString().slice(0,10), payment_method:"cash", receipt_ref:"" });
   const [saving, setSaving] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File|null>(null);
@@ -604,12 +604,12 @@ function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
       let receiptPath: string|null = null;
       if (receiptFile) {
         const ext = receiptFile.name.split(".").pop() ?? "jpg";
-        const path = `${user?.branch_id??"pla"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const path = `${branch||"pla"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         const { error: upErr } = await supabase.storage.from("receipts").upload(path, receiptFile, { upsert: true });
         if (!upErr) receiptPath = path;
       }
       const { error } = await supabase.from("expenditures").insert({
-        ...form, amount: Number(form.amount), branch_id: user?.branch_id??"",
+        ...form, amount: Number(form.amount), branch_id: branch,
         created_by: user?.id, receipt_path: receiptPath,
       });
       if (error) throw error;
@@ -717,13 +717,13 @@ function IncomeTab() {
           </tbody>
         </table>
       </PageCard>
-      {open && <IncomeForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["income-list"]}); }}/>}
+      {open && <IncomeForm branch={branchId} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["income-list"]}); }}/>}
     </div>
   );
 }
 
-function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
-  const { user, activeBranch } = useAuth();
+function IncomeForm({ branch, onClose, onSaved }:{ branch:string; onClose:()=>void; onSaved:()=>void }) {
+  const { user } = useAuth();
   const [form, setForm] = useState({ category:"school_fees", description:"", amount:"", commission_rate:"", income_date: new Date().toISOString().slice(0,10), payment_method:"bank_transfer", reference:"" });
   const [saving, setSaving] = useState(false);
   async function save() {
@@ -735,7 +735,7 @@ function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void })
       const { error } = await supabase.from("income_records").insert({
         ...form, amount, commission_rate: rate,
         commission_amount: Math.round(amount * rate / 100 * 100) / 100,
-        branch_id: user?.branch_id??"", created_by: user?.id,
+        branch_id: branch, created_by: user?.id,
       });
       if (error) throw error;
       toast.success("Income recorded");
