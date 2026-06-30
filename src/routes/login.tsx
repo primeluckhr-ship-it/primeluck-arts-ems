@@ -10,13 +10,6 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const QUICK_LOGINS = [
-  { label:"Admin",   email:"admin@primeluck.ac.ke",    role:"super_admin" },
-  { label:"Finance", email:"finance@primeluck.ac.ke",  role:"finance_admin" },
-  { label:"Teacher", email:"teacher@primeluck.ac.ke",  role:"teacher" },
-  { label:"Dice",    email:"admin@dicearts.co.ke",     role:"dice_admin" },
-];
-
 function LoginPage() {
   const { user, login } = useAuth();
   const nav = useNavigate();
@@ -36,11 +29,6 @@ function LoginPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally { setLoading(false); }
-  }
-
-  function quickLogin(e: string) {
-    setEmail(e);
-    setPassword("PLA@2026");
   }
 
   return (
@@ -71,21 +59,6 @@ function LoginPage() {
             className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-accent text-accent-foreground font-semibold py-2.5 hover:opacity-90 disabled:opacity-50 transition">
             {loading && <Loader2 className="size-4 animate-spin"/>} Sign in
           </button>
-
-          {/* Quick login buttons */}
-          <div className="border-t border-border pt-3">
-            <div className="text-xs text-muted-foreground mb-2">Quick sign-in (password: PLA@2026)</div>
-            <div className="grid grid-cols-4 gap-1.5">
-              {QUICK_LOGINS.map((q) => (
-                <button key={q.email} type="button" onClick={() => quickLogin(q.email)}
-                  className={`py-1.5 rounded-md text-xs font-medium border transition-colors ${email===q.email
-                    ? "bg-accent text-accent-foreground border-accent"
-                    : "border-border text-muted-foreground hover:border-accent hover:text-foreground"}`}>
-                  {q.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </form>
 
         <p className="text-center text-xs text-muted-foreground mt-4">
