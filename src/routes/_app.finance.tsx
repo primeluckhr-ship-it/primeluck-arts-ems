@@ -158,15 +158,20 @@ function InvoicesTab() {
   const [generating, setGenerating] = useState(false);
   const [showTermly, setShowTermly] = useState(false);
 
+  const invBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data } = useQuery({
-    queryKey:["invoices-list", month, year, statusFilter, user?.branch_id],
+    queryKey:["invoices-list", month, year, statusFilter, invBranch],
     queryFn: async () => {
+      if (!invBranch) return [];
+      // Two-step: resolve branch student IDs first — reliable, no join-filter ambiguity
+      const { data: branchStudents } = await supabase.from("students").select("id").eq("branch_id", invBranch);
+      const studentIds = (branchStudents??[]).map((s:any)=>s.id);
+      if (!studentIds.length) return [];
       let q = supabase.from("invoices")
         .select("*,students(first_name,last_name,admission_number,branch_id)")
+        .in("student_id", studentIds)
         .eq("period_month", month).eq("period_year", year);
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
-      const invBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
-      if (invBranch) q = q.eq("students.branch_id", invBranch);
       return (await q.order("invoice_number", {ascending:false})).data ?? [];
     },
   });
@@ -379,12 +384,12 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
   const [studentId, setStudentId] = useState("");
   const [form, setForm] = useState({ amount:"", payment_method:"MPesa", mpesa_code:"", notes:"", payment_date: new Date().toISOString().slice(0,10) });
   const [saving, setSaving] = useState(false);
+  const payBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data: students } = useQuery({
-    queryKey:["students-active"],
+    queryKey:["students-active", payBranch],
     queryFn: async () => {
-      const branchPay = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active");
-      if (branchPay) q = q.eq("branch_id", branchPay);
+      if (payBranch) q = q.eq("branch_id", payBranch);
       return (await q.order("first_name")).data??[];
     },
   });
@@ -400,6 +405,7 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
         mpesa_code: form.mpesa_code||null,
         notes: form.notes||null,
         payment_date: form.payment_date,
+        branch_id: payBranch,
       });
       if (error) throw error;
       // Update student account
@@ -449,12 +455,19 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
 /* ── ARREARS ── */
 function ArrearsTab() {
   const { user, activeBranch } = useAuth();
+  const arrearsBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*")).data??[] });
   const { data } = useQuery({
-    queryKey:["arrears-list"],
+    queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
+      if (!arrearsBranch) return [];
+      // Two-step: resolve branch student IDs first — student_accounts has no branch_id column
+      const { data: branchStudents } = await supabase.from("students").select("id").eq("branch_id", arrearsBranch);
+      const studentIds = (branchStudents??[]).map((s:any)=>s.id);
+      if (!studentIds.length) return [];
       let q = supabase.from("student_accounts")
         .select("*,students(id,first_name,last_name,admission_number,branch_id,student_parents(parents(whatsapp,phone,first_name,last_name)))")
+        .in("student_id", studentIds)
         .gt("total_outstanding", 0).order("total_outstanding",{ascending:false});
       return (await q).data ?? [];
     },
