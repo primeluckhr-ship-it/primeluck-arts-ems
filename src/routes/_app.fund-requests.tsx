@@ -124,6 +124,7 @@ function RequestCard({ request: req, isAdmin, onUpdate }: { request:any; isAdmin
         approved_by: user?.id,
         approved_at: new Date().toISOString(),
         expenditure_id: exp.id,
+        rejection_reason: null,
       }).eq("id", req.id);
       if (error) throw error;
 
@@ -176,9 +177,14 @@ function RequestCard({ request: req, isAdmin, onUpdate }: { request:any; isAdmin
         </div>
       )}
       {req.status === "rejected" && req.rejection_reason && (
-        <div className="flex items-center gap-2 text-xs text-danger bg-danger/10 rounded-md px-3 py-1.5">
-          <XCircle className="size-3.5"/>
-          Rejected: {req.rejection_reason}
+        <div className="flex items-center justify-between gap-2 text-xs text-danger bg-danger/10 rounded-md px-3 py-1.5">
+          <span className="flex items-center gap-2"><XCircle className="size-3.5"/>Rejected: {req.rejection_reason}</span>
+          {isAdmin && (
+            <button onClick={approve} disabled={processing}
+              className="shrink-0 text-success underline hover:no-underline disabled:opacity-50">
+              Reconsider & Approve
+            </button>
+          )}
         </div>
       )}
 
