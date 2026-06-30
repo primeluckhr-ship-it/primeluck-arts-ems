@@ -521,7 +521,7 @@ function ExpenditureTab() {
   const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const branchId = user?.branch_id ?? "";
+  const branchId = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data, isLoading } = useQuery({
     queryKey:["expenditures-list", branchId],
     queryFn: async () => (await supabase.from("expenditures").select("*").eq("branch_id", branchId).order("expense_date",{ascending:false})).data??[],
@@ -672,7 +672,7 @@ function IncomeTab() {
   const { user, activeBranch } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const branchId = user?.branch_id ?? "";
+  const branchId = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const { data, isLoading } = useQuery({
     queryKey:["income-list", branchId],
     queryFn: async () => (await supabase.from("income_records").select("*").eq("branch_id", branchId).order("income_date",{ascending:false})).data??[],
