@@ -11,7 +11,8 @@ import { Field, Input } from "./_app.students";
 export const Route = createFileRoute("/_app/parents")({ component: ParentsPage });
 
 function ParentsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const parentBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
 
@@ -26,13 +27,16 @@ function ParentsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["parents-list", user?.branch_id],
+    queryKey: ["parents-list", parentBranch],
     queryFn: async () => {
-      // parents have no branch_id — filter via student_parents join
+      // parents have no branch_id — resolve via student_parents join, then filter client-side
       const { data } = await supabase.from("parents")
-        .select("*,student_parents(is_primary,students(first_name,last_name,admission_number,status))")
+        .select("*,student_parents(is_primary,students(first_name,last_name,admission_number,status,branch_id))")
         .order("first_name");
-      return data ?? [];
+      if (!parentBranch) return data ?? [];
+      return (data ?? []).filter((p: any) =>
+        (p.student_parents ?? []).some((sp: any) => sp.students?.branch_id === parentBranch)
+      );
     },
   });
 

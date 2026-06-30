@@ -21,16 +21,17 @@ const CAT_LABELS: Record<string,string> = {
 };
 
 function FeedbackAdminPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const revBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const qc = useQueryClient();
   const [selected, setSelected] = useState<any>(null);
   const [filter, setFilter] = useState("all");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["feedback-list", user?.branch_id],
+    queryKey: ["feedback-list", revBranch],
     queryFn: async () => {
       let q = supabase.from("feedback").select("*").order("created_at", { ascending: false });
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      if (revBranch) q = q.eq("branch_id", revBranch);
       return (await q).data ?? [];
     },
   });

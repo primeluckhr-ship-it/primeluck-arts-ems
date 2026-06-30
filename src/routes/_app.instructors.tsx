@@ -16,7 +16,8 @@ const STATUS_COLORS: Record<string,string> = {
 };
 
 function InstructorsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
 
@@ -40,10 +41,10 @@ function InstructorsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["instructors-full", user?.branch_id],
+    queryKey: ["instructors-full", branch],
     queryFn: async () => {
       let instQ = supabase.from("instructors").select("*").order("first_name");
-      if (user?.role !== "super_admin") instQ = instQ.eq("branch_id", user?.branch_id ?? "");
+      if (branch) instQ = instQ.eq("branch_id", branch);
       const { data: insts } = await instQ;
       
       // Get course count per instructor
@@ -152,7 +153,7 @@ function InstructorsPage() {
       </PageCard>
 
       {open && (
-        <InstructorForm initial={editing} onClose={() => setOpen(false)}
+        <InstructorForm initial={editing} branch={branch} onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["instructors-full"] }); }}/>
       )}
     </div>
@@ -165,7 +166,7 @@ const SPECIALIZATIONS = [
   "Vocals","Drums","Art History","Mixed Media","Crafts",
 ];
 
-function InstructorForm({ initial, onClose, onSaved }: { initial:any; onClose:()=>void; onSaved:()=>void }) {
+function InstructorForm({ initial, branch, onClose, onSaved }: { initial:any; branch:string; onClose:()=>void; onSaved:()=>void }) {
   const [form, setForm] = useState({
     first_name: initial?.first_name??"",
     last_name:  initial?.last_name??"",
@@ -195,7 +196,7 @@ function InstructorForm({ initial, onClose, onSaved }: { initial:any; onClose:()
         if (error) throw error;
         toast.success("Instructor updated");
       } else {
-        const { error } = await supabase.from("instructors").insert({ ...form, id: crypto.randomUUID() });
+        const { error } = await supabase.from("instructors").insert({ ...form, id: crypto.randomUUID(), branch_id: branch });
         if (error) throw error;
         toast.success("Instructor added");
       }

@@ -17,10 +17,10 @@ function ProgramsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["programs-list", user?.branch_id],
+    queryKey: ["programs-list", progBranch],
     queryFn: async () => {
       let q = supabase.from("programs").select("*").order("name");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      if (progBranch) q = q.eq("branch_id", progBranch);
       return (await q).data ?? [];
     },
   });
@@ -90,7 +90,7 @@ function ProgramsPage() {
   );
 }
 
-function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
+function ProgramForm({ initial, branch, onClose, onSaved }: { initial: any; branch: string; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: initial?.name ?? "",
     category: initial?.category ?? "general",
@@ -113,7 +113,7 @@ function ProgramForm({ initial, onClose, onSaved }: { initial: any; onClose: () 
         monthly_fee: form.billing_cycle === "monthly" ? (Number(form.monthly_fee) || null) : null,
         term_fee: form.billing_cycle === "termly" ? (Number(form.term_fee) || null) : null,
         max_students: Number(form.max_students) || null,
-        branch_id: user?.branch_id ?? "",
+        branch_id: branch,
       };
       if (initial) {
         const { error } = await supabase.from("programs").update(payload).eq("id", initial.id);

@@ -25,7 +25,8 @@ const URGENCY_COLORS: Record<string,string> = {
 const EXPENSE_CATS = ["Supplies","Equipment","Transport","Printing","Refreshments","Software","Maintenance","Other"];
 
 function FundRequestsPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const frBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const isAdmin = ["super_admin","finance_admin","dice_admin"].includes(user?.role??"");
@@ -37,10 +38,8 @@ function FundRequestsPage() {
       let q = supabase.from("fund_requests")
         .select("*,instructors(first_name,last_name,email,branch_id),users(first_name,last_name)")
         .order("created_at", { ascending: false });
-      // super_admin sees all branches; dice_admin and branch admins see their own
-      if (user?.role !== "super_admin") {
-        q = q.eq("branch_id", user?.branch_id ?? "");
-      }
+      // Scope to the active branch (super_admin uses the branch switcher)
+      if (frBranch) q = q.eq("branch_id", frBranch);
       if (!isAdmin) {
         // Instructors see only their own requests
         const lookupId = user?.linked_entity_id || 
@@ -236,7 +235,7 @@ function RequestForm({ onClose, onSaved }: { onClose:()=>void; onSaved:()=>void 
       }
       if (!instructorId) { toast.error("Your instructor profile is not linked — ask admin to set your linked entity in Settings"); return; }
       const { error } = await supabase.from("fund_requests").insert({
-        branch_id: user?.branch_id ?? "",
+        branch_id: frBranch,
         instructor_id: instructorId,
         category: form.category,
         description: form.description,

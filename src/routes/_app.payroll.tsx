@@ -20,18 +20,19 @@ const STATUS_COLORS: Record<string,string> = {
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function PayrollPage() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const [open, setOpen] = useState(false);
   const [selMonth, setSelMonth] = useState(new Date().getMonth()+1);
   const [selYear, setSelYear] = useState(new Date().getFullYear());
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["payroll-list", selMonth, selYear, user?.branch_id],
+    queryKey: ["payroll-list", selMonth, selYear, branch],
     queryFn: async () => (await supabase.from("payroll_records")
       .select("*,instructors(first_name,last_name,email)")
       .eq("month", selMonth).eq("year", selYear)
-      .eq("branch_id", user?.branch_id??"")
+      .eq("branch_id", branch)
       .order("created_at")).data ?? [],
   });
 
@@ -49,7 +50,7 @@ function PayrollPage() {
       const rec = (data??[]).find((r:any)=>r.id===id);
       if (rec) {
         await supabase.from("expenditures").insert({
-          branch_id: user?.branch_id??"",
+          branch_id: branch,
           category: "instructor_pay",
           description: `Instructor pay: ${rec.instructors?.first_name} ${rec.instructors?.last_name} — ${MONTHS[rec.month-1]} ${rec.year}`,
           amount: rec.net_amount,
@@ -63,13 +64,13 @@ function PayrollPage() {
   }
 
   async function generateAll() {
-    const { data: instructors } = await supabase.from("instructors").select("id,first_name,last_name").eq("status","active");
-    const { data: existing } = await supabase.from("payroll_records").select("instructor_id").eq("month",selMonth).eq("year",selYear).eq("branch_id",user?.branch_id??"");
+    const { data: instructors } = await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", branch);
+    const { data: existing } = await supabase.from("payroll_records").select("instructor_id").eq("month",selMonth).eq("year",selYear).eq("branch_id",branch);
     const existingIds = new Set((existing??[]).map((e:any)=>e.instructor_id));
     const newOnes = (instructors??[]).filter((i:any) => !existingIds.has(i.id));
     if (!newOnes.length) { toast.info("Payroll already generated for all active instructors"); return; }
     const rows = newOnes.map((i:any) => ({
-      branch_id: user?.branch_id??"", instructor_id: i.id,
+      branch_id: branch, instructor_id: i.id,
       month: selMonth, year: selYear,
       sessions_taught: 0, base_amount: 0, deductions: 0, net_amount: 0,
     }));
@@ -155,7 +156,7 @@ function PayrollForm({ onClose, onSaved, month, year }:{ onClose:()=>void; onSav
     try {
       const base = Number(form.base_amount)||0, ded = Number(form.deductions)||0;
       const { error } = await supabase.from("payroll_records").insert({
-        branch_id: user?.branch_id??"", instructor_id: form.instructor_id,
+        branch_id: branch, instructor_id: form.instructor_id,
         month, year, sessions_taught: Number(form.sessions_taught)||0,
         base_amount: base, deductions: ded, net_amount: base - ded, notes: form.notes,
       });
