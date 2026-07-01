@@ -31,9 +31,9 @@ function AdminDash() {
   const isSuper = user?.role === "super_admin";
   const branch = (isSuper ? activeBranch : user?.branch_id) ?? "";
 
-  // Apply branch filter for non-super-admin users
+  // Apply branch filter — super_admin uses activeBranch, others use their own branch
   function br<T extends object>(q: T): T {
-    return (isSuper ? q : (q as any).eq("branch_id", branch)) as T;
+    return branch ? (q as any).eq("branch_id", branch) : q;
   }
 
   const stats = useQuery({
@@ -44,8 +44,8 @@ function AdminDash() {
       const [students, courses, payments, accounts, attendance, enrollments, studentTypes] = await Promise.all([
         br(supabase.from("students").select("id", { count: "exact", head: true }).eq("status", "active")),
         br(supabase.from("courses").select("id", { count: "exact", head: true }).eq("status", "active")),
-        supabase.from("payments").select("amount,payment_date").gte("payment_date", monthStart),
-        supabase.from("student_accounts").select("total_outstanding"),
+        branch ? supabase.from("payments").select("amount,payment_date").eq("branch_id", branch).gte("payment_date", monthStart) : supabase.from("payments").select("amount,payment_date").gte("payment_date", monthStart),
+        branch ? supabase.from("student_accounts").select("total_outstanding,students!inner(branch_id)").eq("students.branch_id", branch) : supabase.from("student_accounts").select("total_outstanding"),
         supabase.from("attendance_records").select("status,sessions!inner(session_date)").gte("sessions.session_date", today),
         br(supabase.from("students").select("id", { count: "exact", head: true }).gte("enrollment_date", monthStart)),
         br(supabase.from("students").select("student_type").eq("status","active")),

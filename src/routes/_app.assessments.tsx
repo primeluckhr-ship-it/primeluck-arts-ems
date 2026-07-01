@@ -107,9 +107,9 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       if (formBranch) q = q.eq("branch_id", formBranch);
       return (await q).data ?? [];
     } });
-  const { data: courses } = useQuery({ queryKey: ["assess-courses", user?.branch_id], queryFn: async () => {
+  const { data: courses } = useQuery({ queryKey: ["assess-courses", formBranch], queryFn: async () => {
       let q = supabase.from("courses").select("id,name").eq("status","active");
-      if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
+      if (formBranch) q = q.eq("branch_id", formBranch);
       return (await q).data ?? [];
     } });
   const [form, setForm] = useState({
