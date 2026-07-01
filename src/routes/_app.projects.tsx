@@ -144,11 +144,23 @@ function ProjectDetail({ project, onBack, onDelete }: { project: any; onBack: ()
   const qc = useQueryClient();
   const [openMilestone, setOpenMilestone] = useState(false);
   const [milestoneForm, setMilestoneForm] = useState({ title: "", due_date: "", status: "pending", notes: "" });
+  const [openBudget, setOpenBudget] = useState(false);
+  const [budgetForm, setBudgetForm] = useState({ item_name: "", estimated_cost: "", quantity: "1", unit: "unit", supplier: "", notes: "" });
+  const [openStage, setOpenStage] = useState(false);
+  const [stageForm, setStageForm] = useState({ title: "", description: "", due_date: "", stage_order: "0" });
   const [saving, setSaving] = useState(false);
 
   const { data: milestones } = useQuery({
     queryKey: ["milestones", project.id],
     queryFn: async () => (await supabase.from("project_milestones").select("*").eq("project_id", project.id).order("due_date")).data ?? [],
+  });
+  const { data: budgetItems } = useQuery({
+    queryKey: ["budget-items", project.id],
+    queryFn: async () => (await supabase.from("project_budget_items").select("*").eq("project_id", project.id).order("created_at")).data ?? [],
+  });
+  const { data: stages } = useQuery({
+    queryKey: ["project-stages", project.id],
+    queryFn: async () => (await supabase.from("project_stages").select("*").eq("project_id", project.id).order("stage_order")).data ?? [],
   });
 
   async function saveMilestone() {
@@ -163,6 +175,56 @@ function ProjectDetail({ project, onBack, onDelete }: { project: any; onBack: ()
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
 
+  async function saveBudgetItem() {
+    if (!budgetForm.item_name || !budgetForm.estimated_cost) { toast.error("Item name and cost required"); return; }
+    await supabase.from("project_budget_items").insert({
+      ...budgetForm, project_id: project.id, branch_id: project.branch_id,
+      estimated_cost: Number(budgetForm.estimated_cost), quantity: Number(budgetForm.quantity) || 1,
+    });
+    toast.success("Budget item added");
+    setOpenBudget(false);
+    setBudgetForm({ item_name: "", estimated_cost: "", quantity: "1", unit: "unit", supplier: "", notes: "" });
+    qc.invalidateQueries({ queryKey: ["budget-items", project.id] });
+  }
+
+  async function markAcquired(item: any) {
+    // Mark as acquired and auto-create an expenditure record
+    const { data: exp } = await supabase.from("expenditures").insert({
+      branch_id: project.branch_id,
+      category: "materials",
+      description: `[Project: ${project.title}] ${item.item_name}`,
+      amount: item.actual_cost || item.estimated_cost,
+      expense_date: new Date().toISOString().slice(0, 10),
+      payment_method: "cash",
+    }).select().single();
+    await supabase.from("project_budget_items").update({
+      status: "acquired", acquired_at: new Date().toISOString(), expenditure_id: exp?.id,
+    }).eq("id", item.id);
+    toast.success("Marked as acquired — expenditure recorded");
+    qc.invalidateQueries({ queryKey: ["budget-items", project.id] });
+  }
+
+  async function saveStage() {
+    if (!stageForm.title) { toast.error("Stage title required"); return; }
+    const maxOrder = Math.max(0, ...(stages ?? []).map((s: any) => s.stage_order));
+    await supabase.from("project_stages").insert({
+      ...stageForm, project_id: project.id, stage_order: maxOrder + 1,
+      due_date: stageForm.due_date || null,
+    });
+    toast.success("Stage added");
+    setOpenStage(false);
+    setStageForm({ title: "", description: "", due_date: "", stage_order: "0" });
+    qc.invalidateQueries({ queryKey: ["project-stages", project.id] });
+  }
+
+  async function advanceStage(stage: any) {
+    const next = stage.status === "pending" ? "in_progress" : stage.status === "in_progress" ? "completed" : "pending";
+    await supabase.from("project_stages").update({
+      status: next, completed_at: next === "completed" ? new Date().toISOString() : null,
+    }).eq("id", stage.id);
+    qc.invalidateQueries({ queryKey: ["project-stages", project.id] });
+  }
+
   async function toggleMilestone(m: any) {
     const next = m.status === "completed" ? "pending" : m.status === "pending" ? "in_progress" : "completed";
     await supabase.from("project_milestones").update({ status: next }).eq("id", m.id);
@@ -171,6 +233,11 @@ function ProjectDetail({ project, onBack, onDelete }: { project: any; onBack: ()
 
   const done = (milestones ?? []).filter((m: any) => m.status === "completed").length;
   const total = milestones?.length ?? 0;
+  const stagesDone = (stages ?? []).filter((s: any) => s.status === "completed").length;
+  const stagesTotal = stages?.length ?? 0;
+  const budgetTotal = (budgetItems ?? []).reduce((s: number, i: any) => s + Number(i.estimated_cost) * (i.quantity || 1), 0);
+  const budgetSpent = (budgetItems ?? []).filter((i: any) => i.status === "acquired").reduce((s: number, i: any) => s + Number(i.actual_cost || i.estimated_cost) * (i.quantity || 1), 0);
+  const budgetPending = budgetTotal - budgetSpent;
 
   return (
     <div className="space-y-4">
@@ -232,6 +299,51 @@ function ProjectDetail({ project, onBack, onDelete }: { project: any; onBack: ()
           {!milestones?.length && <p className="py-4 text-center text-muted-foreground text-sm">No milestones yet — click Add to track progress</p>}
         </div>
       </PageCard>
+
+      {/* Stage modal */}
+      {openStage && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl p-5 w-full max-w-md shadow-xl space-y-4">
+            <h2 className="text-lg font-semibold">Add Progress Stage</h2>
+            <div className="space-y-3">
+              <Field label="Stage title"><Input value={stageForm.title} onChange={(v) => setStageForm({...stageForm,title:v})}/></Field>
+              <Field label="Description (optional)">
+                <textarea value={stageForm.description} onChange={(e) => setStageForm({...stageForm,description:e.target.value})}
+                  className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm resize-none h-20"/>
+              </Field>
+              <Field label="Target date"><Input type="date" value={stageForm.due_date} onChange={(v) => setStageForm({...stageForm,due_date:v})}/></Field>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setOpenStage(false)} className="flex-1 py-2 rounded-lg border border-border text-sm">Cancel</button>
+              <button onClick={saveStage} className="flex-1 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium">Add Stage</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Budget item modal */}
+      {openBudget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl p-5 w-full max-w-md shadow-xl space-y-4">
+            <h2 className="text-lg font-semibold">Add Budget Item</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Item name" className="col-span-2"><Input value={budgetForm.item_name} onChange={(v) => setBudgetForm({...budgetForm,item_name:v})}/></Field>
+              <Field label="Estimated cost (KES)"><Input type="number" value={budgetForm.estimated_cost} onChange={(v) => setBudgetForm({...budgetForm,estimated_cost:v})}/></Field>
+              <Field label="Quantity"><Input type="number" value={budgetForm.quantity} onChange={(v) => setBudgetForm({...budgetForm,quantity:v})}/></Field>
+              <Field label="Unit (e.g. pcs, kg, rolls)"><Input value={budgetForm.unit} onChange={(v) => setBudgetForm({...budgetForm,unit:v})}/></Field>
+              <Field label="Supplier (optional)"><Input value={budgetForm.supplier} onChange={(v) => setBudgetForm({...budgetForm,supplier:v})}/></Field>
+              <Field label="Notes" className="col-span-2">
+                <textarea value={budgetForm.notes} onChange={(e) => setBudgetForm({...budgetForm,notes:e.target.value})}
+                  className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm resize-none h-16"/>
+              </Field>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setOpenBudget(false)} className="flex-1 py-2 rounded-lg border border-border text-sm">Cancel</button>
+              <button onClick={saveBudgetItem} className="flex-1 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium">Add Item</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {openMilestone && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
