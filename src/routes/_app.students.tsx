@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
@@ -30,10 +30,24 @@ function StudentsPage() {
   const { user, activeBranch } = useAuth();
   const isSuper = user?.role === "super_admin";
 
-  // Branch segment: super_admin can pick All / PLA / Dice; others are locked to their branch
+  // Build tabs dynamically based on which branch super_admin is viewing
+  const branchTabs = isSuper
+    ? activeBranch === "dice-arts-nairobi"
+      ? [{ id: "dice-arts-nairobi", label: "Dice Arts" }]
+      : activeBranch === "branch-1"
+      ? [{ id: "all", label: "All" }, { id: "branch-1", label: "PrimeLuck Arts" }]
+      : [{ id: "all", label: "All Students" }, { id: "branch-1", label: "PrimeLuck Arts" }, { id: "dice-arts-nairobi", label: "Dice Arts" }]
+    : [];
+
+  // Branch segment: super_admin can pick within their active branch context; others locked to their branch
   const [branchSegment, setBranchSegment] = useState<string>(
     isSuper ? (activeBranch ?? "all") : (user?.branch_id ?? "")
   );
+
+  // Reset segment filter whenever super_admin switches active branch
+  useEffect(() => {
+    if (isSuper) setBranchSegment(activeBranch ?? "all");
+  }, [activeBranch, isSuper]);
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -118,10 +132,10 @@ function StudentsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Super admin branch segment tabs */}
-      {isSuper && (
+      {/* Super admin branch segment tabs — only shown when there are multiple options */}
+      {isSuper && branchTabs.length > 1 && (
         <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
-          {BRANCH_TABS.map((tab) => (
+          {branchTabs.map((tab) => (
             <button key={tab.id} onClick={() => setBranchSegment(tab.id)}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${branchSegment === tab.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
               {tab.label}
