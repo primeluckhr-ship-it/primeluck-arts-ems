@@ -40,7 +40,7 @@ function ProjectsPage() {
     queryFn: async () => {
       if (!projectBranch) return [];
       const { data } = await supabase.from("projects")
-        .select("*,instructors(first_name,last_name),dice_institutions(name)")
+        .select("*,instructors:lead_instructor_id(first_name,last_name),co_lead:co_lead_instructor_id(first_name,last_name),dice_institutions(name)")
         .eq("branch_id", projectBranch)
         .order("created_at", { ascending: false });
       return data ?? [];
@@ -273,13 +273,19 @@ function ProjectForm({ initial, branch, onClose, onSaved }: { initial: any; bran
     venue: initial?.venue ?? "",
     budget: initial?.budget ?? "",
     lead_instructor_id: initial?.lead_instructor_id ?? "",
+    co_lead_instructor_id: initial?.co_lead_instructor_id ?? "",
     dice_institution_id: initial?.dice_institution_id ?? "",
   });
   const [saving, setSaving] = useState(false);
 
+  const otherBranch = branch === "dice-arts-nairobi" ? "branch-1" : "dice-arts-nairobi";
   const { data: instructors } = useQuery({
     queryKey: ["instructors-list-proj", branch],
     queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", branch).order("first_name")).data ?? [],
+  });
+  const { data: coLeadInstructors } = useQuery({
+    queryKey: ["instructors-co-lead", otherBranch],
+    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", otherBranch).order("first_name")).data ?? [],
   });
   const { data: diceInstitutions } = useQuery({
     queryKey: ["dice-institutions", branch],
@@ -294,6 +300,7 @@ function ProjectForm({ initial, branch, onClose, onSaved }: { initial: any; bran
       const payload = { ...form, branch_id: branch, created_by: user?.id,
         budget: form.budget ? Number(form.budget) : null,
         lead_instructor_id: form.lead_instructor_id || null,
+        co_lead_instructor_id: form.co_lead_instructor_id || null,
         dice_institution_id: form.dice_institution_id || null,
         start_date: form.start_date || null, end_date: form.end_date || null };
       if (initial) {
