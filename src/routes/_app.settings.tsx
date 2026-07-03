@@ -135,9 +135,15 @@ function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void;
   async function save() {
     setSaving(true);
     try {
-      const payload:any = { ...form };
+      const payload:any = {
+        ...form,
+        // Normalize email: always lowercase + trim so login query always matches
+        email: form.email.toLowerCase().trim(),
+        // Convert empty strings to null for nullable FK columns
+        branch_id: form.branch_id || null,
+        linked_entity_id: (!needsLink || !form.linked_entity_id) ? null : (form.linked_entity_id || null),
+      };
       if (password) payload.password_hash = await sha256(password);
-      if (!needsLink) payload.linked_entity_id = null;
       if (initial) {
         const { error } = await supabase.from("users").update(payload).eq("id", initial.id);
         if (error) throw error;
@@ -147,7 +153,7 @@ function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void;
         payload.id = crypto.randomUUID();
         const { error } = await supabase.from("users").insert(payload);
         if (error) throw error;
-        toast.success("User created");
+        toast.success("User created — they can now sign in with the email and password you set");
       }
       onSaved();
     } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }

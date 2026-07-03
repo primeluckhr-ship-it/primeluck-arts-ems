@@ -59,15 +59,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const hash = await sha256(password);
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanPassword = password.trim();
+    if (!cleanEmail || !cleanPassword) throw new Error("Email and password are required");
+    const hash = await sha256(cleanPassword);
     const { data, error } = await supabase
       .from("users")
       .select("id,email,role,first_name,last_name,branch_id,linked_entity_id,password_hash,is_active")
-      .eq("email", email.toLowerCase().trim())
+      .eq("email", cleanEmail)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Invalid email or password");
-    if (!data.is_active) throw new Error("Account is inactive");
+    if (data.is_active === false) throw new Error("This account has been deactivated — contact your administrator");
     if (data.password_hash !== hash) throw new Error("Invalid email or password");
     const su: SessionUser = {
       id: data.id,
