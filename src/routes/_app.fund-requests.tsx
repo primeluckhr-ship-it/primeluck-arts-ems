@@ -219,7 +219,9 @@ function RequestCard({ request: req, isAdmin, onUpdate }: { request:any; isAdmin
 }
 
 function RequestForm({ onClose, onSaved }: { onClose:()=>void; onSaved:()=>void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  // Compute branch inside form — same logic as parent but self-contained
+  const formBranch = user?.role === "super_admin" ? (activeBranch ?? "") : (user?.branch_id ?? "");
   const [form, setForm] = useState({ category:"Supplies", description:"", amount:"", urgency:"normal" });
   const [saving, setSaving] = useState(false);
 
@@ -227,7 +229,7 @@ function RequestForm({ onClose, onSaved }: { onClose:()=>void; onSaved:()=>void 
     if (!form.description || !form.amount) { toast.error("Fill all required fields"); return; }
     setSaving(true);
     try {
-      // Lookup instructor: by linked_entity_id first, then email
+      // Lookup instructor: by linked_entity_id first, then by email match
       let instructorId = user?.linked_entity_id;
       if (!instructorId) {
         const { data: inst } = await supabase.from("instructors").select("id").eq("email", user?.email ?? "").limit(1);
@@ -235,7 +237,7 @@ function RequestForm({ onClose, onSaved }: { onClose:()=>void; onSaved:()=>void 
       }
       if (!instructorId) { toast.error("Your instructor profile is not linked — ask admin to set your linked entity in Settings"); return; }
       const { error } = await supabase.from("fund_requests").insert({
-        branch_id: frBranch,
+        branch_id: formBranch,
         instructor_id: instructorId,
         category: form.category,
         description: form.description,

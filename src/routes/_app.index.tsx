@@ -18,7 +18,8 @@ function Dashboard() {
   switch (user.role) {
     case "super_admin": return <AdminDash />;
     case "finance_admin": return <FinanceDash />;
-    case "teacher": return <TeacherDash />;
+    case "teacher":
+    case "instructor": return <TeacherDash />;
     case "parent": return <ParentDash />;
     case "student": return <StudentDash />;
     case "dice_admin": return <DiceAdminDash />;
