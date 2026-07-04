@@ -647,7 +647,11 @@ function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold mb-4">Record Expenditure</h2>
+        <h2 className="text-lg font-semibold mb-2">Record Expenditure</h2>
+        <div className="text-xs text-muted-foreground mb-3 px-1">
+          Saving to: <span className="font-semibold text-accent">{branch === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts Academy"}</span>
+          {!branch && <span className="text-danger ml-1">⚠ Branch not detected — refresh page</span>}
+        </div>
         <div className="space-y-3">
           <Field label="Category">
             <select value={form.category} onChange={(e) => setForm({...form,category:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
@@ -785,7 +789,11 @@ function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold mb-4">Record Income</h2>
+        <h2 className="text-lg font-semibold mb-2">Record Income</h2>
+        <div className="text-xs text-muted-foreground mb-3 px-1">
+          Saving to: <span className="font-semibold text-accent">{branch === "dice-arts-nairobi" ? "Dice Arts Academy" : "PrimeLuck Arts Academy"}</span>
+          {!branch && <span className="text-danger ml-1">⚠ Branch not detected — refresh page</span>}
+        </div>
         <div className="space-y-3">
           <Field label="Category">
             <select value={form.category} onChange={(e) => setForm({...form,category:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
