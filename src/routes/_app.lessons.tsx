@@ -282,12 +282,33 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
 
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? `Error ${res.status}`);
-      const plan = json.plan;
+      const raw = json.plan;
+
+      // Defensive normalizer — AI can return arrays or objects even when prompted for strings
+      const toStr = (v: unknown, bullet = false): string => {
+        if (!v) return "";
+        if (typeof v === "string") return v.trim();
+        if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean)
+          .map((x) => bullet ? (x.startsWith("•") ? x : `• ${x}`) : x).join("\n");
+        if (typeof v === "object") return Object.values(v as Record<string, unknown>)
+          .map((x) => String(x).trim()).filter(Boolean)
+          .map((x) => bullet ? (x.startsWith("•") ? x : `• ${x}`) : x).join("\n");
+        return String(v).trim();
+      };
+
+      const plan = {
+        title:      toStr(raw.title),
+        objectives: toStr(raw.objectives, true),
+        materials:  toStr(raw.materials,  true),
+        activities: toStr(raw.activities),
+        homework:   toStr(raw.homework),
+        notes:      toStr(raw.notes),
+      };
 
       // Build a compact notes summary from the AI content
       const autoNotes = [
-        plan.objectives ? `Objectives: ${plan.objectives.slice(0,120).replace(/•\s*/g,"").trim()}` : "",
-        plan.activities ? `Activities: ${plan.activities.slice(0,120).trim()}` : "",
+        plan.objectives ? `Objectives: ${plan.objectives.slice(0, 120).replace(/•\s*/g, "").trim()}` : "",
+        plan.activities ? `Activities: ${plan.activities.slice(0, 120).trim()}` : "",
       ].filter(Boolean).join(" | ");
 
       setForm(f => ({
