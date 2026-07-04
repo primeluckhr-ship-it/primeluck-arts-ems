@@ -587,13 +587,17 @@ function ExpenditureTab() {
           </tbody>
         </table>
       </PageCard>
-      {open && <ExpForm branch={branchId} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["expenditures-list"]}); }}/>}
+      {open && <ExpForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["expenditures-list"]}); }}/>}
     </div>
   );
 }
 
-function ExpForm({ branch, onClose, onSaved }:{ branch:string; onClose:()=>void; onSaved:()=>void }) {
-  const { user } = useAuth();
+function ExpForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
+  const { user, activeBranch } = useAuth();
+  // Always compute branch inside form — never rely on stale prop from parent
+  const branch = (user?.role === "super_admin" || user?.role === "dice_admin")
+    ? (activeBranch || user?.branch_id || "")
+    : (user?.branch_id || "");
   const [form, setForm] = useState({ category:"", description:"", amount:"", expense_date: new Date().toISOString().slice(0,10), payment_method:"cash", receipt_ref:"" });
   const [saving, setSaving] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File|null>(null);
@@ -611,24 +615,34 @@ function ExpForm({ branch, onClose, onSaved }:{ branch:string; onClose:()=>void;
   }
   const CATS = ["Rent","Utilities","Instructor Pay","Transport","Supplies","Marketing","Maintenance","Other"];
   async function save() {
-    if (!form.category||!form.description||!form.amount) { toast.error("Fill all required fields"); return; }
+    if (!form.category || !form.description || !form.amount) { toast.error("Fill all required fields"); return; }
+    if (!branch) { toast.error("Branch not set — please refresh and try again", { duration: 8000 }); return; }
     setSaving(true);
     try {
+      const amount = Number(form.amount);
+      if (isNaN(amount) || amount <= 0) { toast.error("Enter a valid amount greater than 0"); setSaving(false); return; }
       let receiptPath: string|null = null;
       if (receiptFile) {
         const ext = receiptFile.name.split(".").pop() ?? "jpg";
-        const path = `${branch||"pla"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const path = `${branch}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         const { error: upErr } = await supabase.storage.from("receipts").upload(path, receiptFile, { upsert: true });
         if (!upErr) receiptPath = path;
       }
       const { error } = await supabase.from("expenditures").insert({
-        ...form, amount: Number(form.amount), branch_id: branch,
-        created_by: user?.id, receipt_path: receiptPath,
+        branch_id: branch,
+        category: form.category,
+        description: form.description.trim(),
+        amount,
+        expense_date: form.expense_date,
+        payment_method: form.payment_method,
+        receipt_ref: form.receipt_ref.trim() || null,
+        created_by: user?.id ?? null,
+        receipt_path: receiptPath,
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       toast.success("Expenditure recorded" + (receiptPath ? " · receipt uploaded ✓" : ""));
       onSaved();
-    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+    } catch(e:any) { toast.error("Failed to save: " + (e.message ?? "Unknown error"), { duration: 8000 }); } finally { setSaving(false); }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -730,30 +744,43 @@ function IncomeTab() {
           </tbody>
         </table>
       </PageCard>
-      {open && <IncomeForm branch={branchId} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["income-list"]}); }}/>}
+      {open && <IncomeForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({queryKey:["income-list"]}); }}/>}
     </div>
   );
 }
 
-function IncomeForm({ branch, onClose, onSaved }:{ branch:string; onClose:()=>void; onSaved:()=>void }) {
-  const { user } = useAuth();
+function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }) {
+  const { user, activeBranch } = useAuth();
+  // Always compute branch inside form — never rely on stale prop from parent
+  const branch = (user?.role === "super_admin" || user?.role === "dice_admin")
+    ? (activeBranch || user?.branch_id || "")
+    : (user?.branch_id || "");
   const [form, setForm] = useState({ category:"school_fees", description:"", amount:"", commission_rate:"", income_date: new Date().toISOString().slice(0,10), payment_method:"bank_transfer", reference:"" });
   const [saving, setSaving] = useState(false);
   async function save() {
-    if (!form.description||!form.amount) { toast.error("Fill required fields"); return; }
+    if (!form.description || !form.amount) { toast.error("Description and amount are required"); return; }
+    if (!branch) { toast.error("Branch not set — please refresh and try again", { duration: 8000 }); return; }
     setSaving(true);
     try {
       const amount = Number(form.amount);
-      const rate = Number(form.commission_rate)||0;
+      if (isNaN(amount) || amount <= 0) { toast.error("Enter a valid amount greater than 0"); setSaving(false); return; }
+      const rate = Number(form.commission_rate) || 0;
       const { error } = await supabase.from("income_records").insert({
-        ...form, amount, commission_rate: rate,
+        branch_id: branch,
+        category: form.category,
+        description: form.description.trim(),
+        amount,
+        commission_rate: rate,
         commission_amount: Math.round(amount * rate / 100 * 100) / 100,
-        branch_id: branch, created_by: user?.id,
+        income_date: form.income_date,
+        payment_method: form.payment_method,
+        reference: form.reference.trim() || null,
+        created_by: user?.id ?? null,
       });
-      if (error) throw error;
-      toast.success("Income recorded");
+      if (error) throw new Error(error.message);
+      toast.success("Income recorded successfully");
       onSaved();
-    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+    } catch(e:any) { toast.error("Failed to save: " + (e.message ?? "Unknown error"), { duration: 8000 }); } finally { setSaving(false); }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
