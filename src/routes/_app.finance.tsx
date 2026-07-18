@@ -456,80 +456,145 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
 function ArrearsTab() {
   const { user, activeBranch } = useAuth();
   const arrearsBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*")).data??[] });
+
   const { data } = useQuery({
     queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
       if (!arrearsBranch) return [];
-      // Two-step: resolve branch student IDs first — student_accounts has no branch_id column
-      const { data: branchStudents } = await supabase.from("students").select("id").eq("branch_id", arrearsBranch);
+      // Step 1: get branch student IDs
+      const { data: branchStudents } = await supabase.from("students")
+        .select("id,first_name,last_name,admission_number,student_parents(parents(first_name,last_name,whatsapp,phone))")
+        .eq("branch_id", arrearsBranch).eq("status","active");
       const studentIds = (branchStudents??[]).map((s:any)=>s.id);
       if (!studentIds.length) return [];
-      let q = supabase.from("student_accounts")
-        .select("*,students(id,first_name,last_name,admission_number,branch_id,student_parents(parents(whatsapp,phone,first_name,last_name)))")
+      // Step 2: get all unpaid/partial invoices for those students
+      const { data: invoices } = await supabase.from("invoices")
+        .select("id,student_id,invoice_number,period_month,period_year,billing_type,total_amount,amount_paid,amount_outstanding,status,due_date,term_id")
         .in("student_id", studentIds)
-        .gt("total_outstanding", 0).order("total_outstanding",{ascending:false});
-      return (await q).data ?? [];
+        .in("status", ["sent","overdue","partial"])
+        .gt("amount_outstanding", 0)
+        .order("period_year").order("period_month");
+      // Step 3: group by student
+      const byStudent: Record<string, any> = {};
+      for (const s of (branchStudents??[])) {
+        byStudent[s.id] = { student: s, invoices: [], cumulative: 0 };
+      }
+      for (const inv of (invoices??[])) {
+        if (byStudent[inv.student_id]) {
+          byStudent[inv.student_id].invoices.push(inv);
+          byStudent[inv.student_id].cumulative += Number(inv.amount_outstanding);
+        }
+      }
+      // Only return students who actually have outstanding invoices
+      return Object.values(byStudent)
+        .filter((r:any) => r.invoices.length > 0)
+        .sort((a:any,b:any) => b.cumulative - a.cumulative);
     },
   });
 
-  function buildWhatsApp(acct:any, template:any) {
-    const student = acct.students;
+  const MONTHS = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  function buildWhatsApp(row:any, template:any) {
+    const student = row.student;
     const parent = student?.student_parents?.[0]?.parents;
     const phone = (parent?.whatsapp || parent?.phone || "").replace(/\D/g,"");
     if (!phone) { toast.error("No WhatsApp number for this student's parent"); return; }
-    const body = (template?.body ?? "")
+    const breakdown = row.invoices.map((inv:any) =>
+      `${inv.period_month ? `${MONTHS[inv.period_month]} ${inv.period_year}` : `Invoice ${inv.invoice_number}`}: KES ${Number(inv.amount_outstanding).toLocaleString("en-KE")}`
+    ).join("\n");
+    const body = (template?.body ?? "Dear parent, your child {{student_name}} has outstanding fees of KES {{amount}}. Breakdown:\n{{breakdown}}. Please settle at your earliest convenience.")
       .replace("{{student_name}}", `${student?.first_name} ${student?.last_name}`)
-      .replace("{{amount}}", Number(acct.total_outstanding).toLocaleString("en-KE"))
+      .replace("{{amount}}", row.cumulative.toLocaleString("en-KE"))
       .replace("{{period}}", format(new Date(),"MMMM yyyy"))
+      .replace("{{breakdown}}", breakdown)
       .replace("{{term}}", "Current Term")
       .replace("{{due_date}}", "5th of this month");
     const url = `https://wa.me/${phone.startsWith("0") ? "254"+phone.slice(1) : phone}?text=${encodeURIComponent(body)}`;
     window.open(url,"_blank");
   }
 
-  const arrears = (data??[]);
-  const totalArrears = arrears.reduce((s:number,a:any)=>s+Number(a.total_outstanding),0);
+  const rows = (data??[]);
+  const totalArrears = rows.reduce((s:number,r:any)=>s+r.cumulative,0);
+  const totalStudents = rows.length;
+
+  function toggleExpand(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard label="Total Arrears" value={formatKES(totalArrears)} icon={<AlertCircle className="size-5"/>} tone="danger"/>
-        <StatCard label="Students Owing" value={arrears.length} icon={<Wallet className="size-5"/>} tone="warning"/>
+        <StatCard label="Students Owing" value={totalStudents} icon={<Wallet className="size-5"/>} tone="warning"/>
+        <StatCard label="Avg per Student" value={totalStudents ? formatKES(totalArrears/totalStudents) : "—"} icon={<Receipt className="size-5"/>} tone="gold"/>
       </div>
-      <PageCard title="Arrears" subtitle="Students with outstanding balances">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-muted-foreground border-b border-border">
-              <th className="py-2 pr-3">Student</th><th className="py-2 pr-3">Adm #</th>
-              <th className="py-2 pr-3 text-right">Outstanding</th><th className="py-2 pr-3">Parent Contact</th><th className="py-2">WhatsApp</th>
-            </tr></thead>
-            <tbody>
-              {arrears.map((a:any) => {
-                const s = a.students;
-                const parent = s?.student_parents?.[0]?.parents;
-                const hasWA = !!(parent?.whatsapp||parent?.phone);
-                const template = (templates??[]).find((t:any)=>t.category==="arrears");
-                return (
-                  <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-2.5 pr-3 font-medium">{s?.first_name} {s?.last_name}</td>
-                    <td className="py-2.5 pr-3 font-mono text-xs">{s?.admission_number}</td>
-                    <td className="py-2.5 pr-3 text-right font-bold text-danger">{formatKES(a.total_outstanding)}</td>
-                    <td className="py-2.5 pr-3 text-xs text-muted-foreground">{parent ? `${parent.first_name} ${parent.last_name}` : "—"}</td>
-                    <td className="py-2.5">
-                      <button onClick={() => buildWhatsApp(a, template)} disabled={!hasWA}
-                        title={hasWA?"Send WhatsApp reminder":"No WhatsApp number registered"}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${hasWA?"bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30 hover:bg-[#25D366]/20":"opacity-30 border-border text-muted-foreground cursor-not-allowed"}`}>
-                        <MessageCircle className="size-3.5"/>
-                        {hasWA?"Send":"No #"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!arrears.length && <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No outstanding arrears 🎉</td></tr>}
-            </tbody>
-          </table>
+      <PageCard title="Cumulative Arrears" subtitle="Click a student to see per-period breakdown">
+        <div className="space-y-2">
+          {rows.map((row:any) => {
+            const s = row.student;
+            const parent = s?.student_parents?.[0]?.parents;
+            const hasWA = !!(parent?.whatsapp||parent?.phone);
+            const template = (templates??[]).find((t:any)=>t.category==="arrears");
+            const isOpen = expanded.has(s.id);
+            return (
+              <div key={s.id} className="border border-border rounded-lg overflow-hidden">
+                {/* Student row — click to expand */}
+                <div className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30"
+                  onClick={() => toggleExpand(s.id)}>
+                  <span className="text-muted-foreground text-xs w-4">{isOpen ? "▾" : "▸"}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-sm">{s.first_name} {s.last_name}</span>
+                    <span className="ml-2 font-mono text-xs text-muted-foreground">{s.admission_number}</span>
+                    {parent && <span className="ml-2 text-xs text-muted-foreground">· {parent.first_name} {parent.last_name}</span>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground">{row.invoices.length} period{row.invoices.length!==1?"s":""}</span>
+                    <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span>
+                    <button onClick={(e) => { e.stopPropagation(); buildWhatsApp(row, template); }} disabled={!hasWA}
+                      title={hasWA?"Send WhatsApp reminder":"No WhatsApp number registered"}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border ${hasWA?"bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30 hover:bg-[#25D366]/20":"opacity-30 border-border text-muted-foreground cursor-not-allowed"}`}>
+                      <MessageCircle className="size-3"/>WA
+                    </button>
+                  </div>
+                </div>
+                {/* Per-period breakdown */}
+                {isOpen && (
+                  <div className="border-t border-border bg-muted/20 px-3 py-2 space-y-1">
+                    {row.invoices.map((inv:any) => (
+                      <div key={inv.id} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-muted-foreground w-24">{inv.invoice_number}</span>
+                          <span className="font-medium">
+                            {inv.period_month ? `${MONTHS[inv.period_month]} ${inv.period_year}` : `Invoice`}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${inv.status==="overdue"?"bg-danger/15 text-danger":inv.status==="partial"?"bg-warning/15 text-warning":"bg-muted text-muted-foreground"}`}>
+                            {inv.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-right shrink-0">
+                          <span className="text-muted-foreground">Billed: {formatKES(inv.total_amount)}</span>
+                          {Number(inv.amount_paid) > 0 && <span className="text-success">Paid: {formatKES(inv.amount_paid)}</span>}
+                          <span className="font-bold text-danger w-24 text-right">Owed: {formatKES(inv.amount_outstanding)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-end pt-1 font-semibold text-sm text-danger">
+                      Total owed: {formatKES(row.cumulative)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!rows.length && (
+            <div className="py-10 text-center text-muted-foreground">No outstanding arrears 🎉</div>
+          )}
         </div>
       </PageCard>
     </div>
