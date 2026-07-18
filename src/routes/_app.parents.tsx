@@ -126,22 +126,26 @@ function ParentsPage() {
 }
 
 function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void; onSaved:()=>void }) {
+  // Always compute branch from auth — never rely on undefined closure variables
+  const { user, activeBranch } = useAuth();
+  const formBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+
   const [form, setForm] = useState({
     first_name:   initial?.first_name??"",
     last_name:    initial?.last_name??"",
     email:        initial?.email??"",
     phone:        initial?.phone??"",
     whatsapp:     initial?.whatsapp??"",
-    relationship: initial?.relationship??"parent",
+    relationship: initial?.relationship??"",   // blank so user must explicitly select
     address:      initial?.address??"",
   });
   const [saving, setSaving] = useState(false);
 
   const { data: students } = useQuery({
-    queryKey:["students-active", branch],
+    queryKey:["students-active", formBranch],
     queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name");
-      if (branch) q = q.eq("branch_id", branch);
+      if (formBranch) q = q.eq("branch_id", formBranch);
       return (await q).data??[];
     },
   });
@@ -150,28 +154,45 @@ function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>voi
   );
 
   async function save() {
-    if (!form.first_name) { toast.error("First name required"); return; }
+    if (!form.first_name.trim()) { toast.error("First name is required"); return; }
+    if (!form.phone.trim()) { toast.error("Phone number is required"); return; }
     setSaving(true);
     try {
+      const payload = {
+        first_name:   form.first_name.trim(),
+        last_name:    form.last_name.trim(),
+        email:        form.email.trim().toLowerCase() || null,
+        phone:        form.phone.trim(),
+        whatsapp:     form.whatsapp.trim() || null,
+        relationship: form.relationship || null,
+        address:      form.address.trim() || null,
+      };
+
       let parentId = initial?.id;
       if (initial) {
-        const { error } = await supabase.from("parents").update(form).eq("id", initial.id);
-        if (error) throw error;
+        const { error } = await supabase.from("parents").update(payload).eq("id", initial.id);
+        if (error) throw new Error("Could not update parent: " + error.message);
       } else {
         parentId = crypto.randomUUID();
-        const { error } = await supabase.from("parents").insert({ ...form, id: parentId });
-        if (error) throw error;
+        const { error } = await supabase.from("parents").insert({ ...payload, id: parentId });
+        if (error) throw new Error("Could not add parent: " + error.message);
       }
-      // Sync linked students
-      if (parentId && linkedStudents.length) {
-        await supabase.from("student_parents").delete().eq("parent_id", parentId);
-        await supabase.from("student_parents").insert(
-          linkedStudents.map((sid,i) => ({ student_id:sid, parent_id:parentId, is_primary:i===0 }))
-        );
+
+      // Always sync student links (delete old + insert new), even when list is empty
+      if (parentId) {
+        const { error: delErr } = await supabase.from("student_parents").delete().eq("parent_id", parentId);
+        if (delErr) throw new Error("Could not update student links: " + delErr.message);
+        if (linkedStudents.length) {
+          const { error: insErr } = await supabase.from("student_parents").insert(
+            linkedStudents.map((sid, i) => ({ student_id: sid, parent_id: parentId, is_primary: i === 0 }))
+          );
+          if (insErr) throw new Error("Could not link students: " + insErr.message);
+        }
       }
-      toast.success(initial?"Parent updated":"Parent added");
+
+      toast.success(initial ? "Parent updated" : "Parent added successfully");
       onSaved();
-    } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
+    } catch(e:any) { toast.error(e.message, { duration: 8000 }); } finally { setSaving(false); }
   }
 
   function toggleStudent(id:string) {
@@ -188,11 +209,12 @@ function ParentForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>voi
           <Field label="Email" className="sm:col-span-2"><Input value={form.email} onChange={(v)=>setForm({...form,email:v})}/></Field>
           <Field label="Phone"><Input value={form.phone} onChange={(v)=>setForm({...form,phone:v})} placeholder="+2547…"/></Field>
           <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(v)=>setForm({...form,whatsapp:v})} placeholder="+2547…"/></Field>
-          <Field label="Relationship">
+          <Field label="Relationship to student">
             <select value={form.relationship} onChange={(e)=>setForm({...form,relationship:e.target.value})} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option value="">— Select relationship —</option>
               <option value="mother">Mother</option>
               <option value="father">Father</option>
+              <option value="parent">Parent</option>
               <option value="guardian">Guardian</option>
               <option value="grandmother">Grandmother</option>
               <option value="grandfather">Grandfather</option>
