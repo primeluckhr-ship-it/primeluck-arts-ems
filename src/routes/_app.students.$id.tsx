@@ -76,7 +76,7 @@ function StudentDetail() {
             </dl>
           </PageCard>
           <PageCard title="Parents">
-            {data.parents.length ? data.parents.map((p: any, i: number) => (
+            {(data.parents??[]).length ? (data.parents??[]).map((p: any, i: number) => (
               <div key={i} className="border-b border-border last:border-0 py-2 text-sm">
                 <div className="font-medium">{p.parents?.first_name} {p.parents?.last_name} {p.is_primary && <Badge className="bg-accent/15 text-accent border-accent/30 ml-2">Primary</Badge>}</div>
                 <div className="text-xs text-muted-foreground">{p.parents?.phone} · {p.parents?.email}</div>
@@ -137,7 +137,7 @@ function StudentDetail() {
             <table className="w-full text-sm">
               <thead><tr className="text-left text-muted-foreground border-b border-border"><th>Receipt</th><th>Method</th><th>Date</th><th className="text-right">Amount</th></tr></thead>
               <tbody>
-                {data.payments.map((p: any) => (
+                {(data.payments??[]).map((p: any) => (
                   <tr key={p.id} className="border-b border-border/50">
                     <td className="py-2 font-mono text-xs">{p.receipt_number}</td>
                     <td className="py-2"><Badge className={getStatusColor(p.payment_method)}>{p.payment_method}</Badge></td>

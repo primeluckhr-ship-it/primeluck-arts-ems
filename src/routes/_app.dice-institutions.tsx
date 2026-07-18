@@ -167,7 +167,7 @@ function PartnerSchoolsPage() {
                     {inst.students.length === 0
                       ? <p className="text-xs text-muted-foreground italic">No students yet</p>
                       : <div className="space-y-1">
-                          {inst.students.map((s: any) => (
+                          {(inst.students??[]).map((s: any) => (
                             <div key={s.id} className="flex items-center justify-between text-xs">
                               <span className="font-medium">{s.first_name} {s.last_name}</span>
                               <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ function PartnerSchoolsPage() {
                     {inst.payments.length === 0
                       ? <p className="text-xs text-muted-foreground italic">No payments recorded</p>
                       : <div className="space-y-1">
-                          {inst.payments.map((p: any, i: number) => (
+                          {(inst.payments??[]).map((p: any, i: number) => (
                             <div key={i} className="flex items-center justify-between text-xs">
                               <div>
                                 <span className="font-medium text-success">{formatKES(p.amount)}</span>

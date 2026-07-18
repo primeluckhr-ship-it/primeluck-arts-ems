@@ -97,6 +97,7 @@ function UsersTab() {
 }
 
 function UserForm({ initial, onClose, onSaved }:{ initial:any; onClose:()=>void; onSaved:()=>void }) {
+  const { user, activeBranch } = useAuth();   // ← must be here, not inherited from parent scope
   const [form, setForm] = useState({
     first_name: initial?.first_name??"", last_name: initial?.last_name??"",
     email: initial?.email??"", role: initial?.role??"instructor",

@@ -345,7 +345,7 @@ function ArtworkForm({ students, branch, onClose, onSaved }: { students: any[]; 
             <select value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })}
               className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option value="">— Select student —</option>
-              {students.map((s: any) => (
+              {(students??[]).map((s: any) => (
                 <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
               ))}
             </select>

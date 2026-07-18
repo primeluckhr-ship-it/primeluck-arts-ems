@@ -48,7 +48,7 @@ function AccountPage() {
     if (!data) return [];
     const entries: any[] = [];
     data.invoices.forEach((i: any) => entries.push({ date: i.issue_date, type: "Invoice", ref: i.invoice_number, debit: i.total_amount, credit: 0 }));
-    data.payments.forEach((p: any) => entries.push({ date: p.payment_date, type: "Payment", ref: p.receipt_number, debit: 0, credit: p.amount }));
+    (data.payments??[]).forEach((p: any) => entries.push({ date: p.payment_date, type: "Payment", ref: p.receipt_number, debit: 0, credit: p.amount }));
     return entries.sort((a, b) => a.date.localeCompare(b.date));
   }, [data]);
 
