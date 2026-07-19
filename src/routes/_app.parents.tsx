@@ -200,19 +200,14 @@ function ParentForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
       toast.error("First name is required");
       return;
     }
-    if (!form.phone.trim()) {
-      toast.error("Phone number is required");
-      return;
-    }
-
     setSaving(true);
     try {
       // Build payload — only send known columns, convert empty strings to null
       const payload: Record<string, any> = {
         first_name:   form.first_name.trim(),
-        last_name:    form.last_name.trim() || null,
+        last_name:    form.last_name.trim(),           // NOT NULL in DB — send empty string, never null
         email:        form.email.trim().toLowerCase() || null,
-        phone:        form.phone.trim(),          // NOT NULL in DB — required
+        phone:        form.phone.trim() || null,       // nullable in DB — optional
         whatsapp:     form.whatsapp.trim() || null,
         relationship: form.relationship || null,
         address:      form.address.trim() || null,
@@ -285,8 +280,8 @@ function ParentForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
           <Field label="Email" className="sm:col-span-2">
             <Input value={form.email} onChange={(v) => set("email", v)} placeholder="Optional" />
           </Field>
-          <Field label="Phone *">
-            <Input value={form.phone} onChange={(v) => set("phone", v)} placeholder="+2547… (required)" />
+          <Field label="Phone">
+            <Input value={form.phone} onChange={(v) => set("phone", v)} placeholder="+2547… (optional)" />
           </Field>
           <Field label="WhatsApp">
             <Input value={form.whatsapp} onChange={(v) => set("whatsapp", v)} placeholder="+2547… (optional)" />

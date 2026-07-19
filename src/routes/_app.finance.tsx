@@ -495,7 +495,7 @@ function ArrearsTab() {
       // Step 2: get student_accounts to find who has outstanding balance
       // This is the source of truth — updated every time a payment is recorded
       const { data: accounts } = await supabase.from("student_accounts")
-        .select("student_id,total_outstanding,total_invoiced,total_paid")
+        .select("student_id,total_outstanding,total_fees,total_paid,account_status")
         .in("student_id", studentIds)
         .gt("total_outstanding", 0);
 
