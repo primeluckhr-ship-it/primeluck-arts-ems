@@ -480,58 +480,59 @@ function ArrearsTab() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*")).data??[] });
 
+  const [balanceFilter, setBalanceFilter] = useState<"all"|"owing"|"clear">("all");
+
   const { data } = useQuery({
     queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
       if (!arrearsBranch) return [];
-      // Step 1: get branch students with outstanding balance from student_accounts
-      // student_accounts is always up-to-date because every payment updates it
+      // Get ALL active students
       const { data: branchStudents } = await supabase.from("students")
         .select("id,first_name,last_name,admission_number,student_parents(parents(first_name,last_name,whatsapp,phone))")
         .eq("branch_id", arrearsBranch).eq("status","active");
       const studentIds = (branchStudents??[]).map((s:any)=>s.id);
       if (!studentIds.length) return [];
 
-      // Step 2: get student_accounts to find who has outstanding balance
-      // This is the source of truth — updated every time a payment is recorded
+      // Get accounts for ALL students — source of truth for balances
       const { data: accounts } = await supabase.from("student_accounts")
         .select("student_id,total_outstanding,total_fees,total_paid,account_status")
-        .in("student_id", studentIds)
-        .gt("total_outstanding", 0);
+        .in("student_id", studentIds);
 
-      const debtorIds = (accounts??[]).map((a:any) => a.student_id);
-      if (!debtorIds.length) return [];
-
-      // Step 3: get their invoices for the period breakdown (oldest first)
+      // Get outstanding invoices for breakdown
       const { data: invoices } = await supabase.from("invoices")
         .select("id,student_id,invoice_number,period_month,period_year,billing_type,total_amount,amount_paid,amount_outstanding,status,due_date")
-        .in("student_id", debtorIds)
+        .in("student_id", studentIds)
         .in("status", ["sent","overdue","partially_paid"])
         .order("period_year",{ascending:true}).order("period_month",{ascending:true});
 
-      // Step 4: build per-student rows using account balance as authoritative total
       const accountMap: Record<string, any> = {};
       for (const a of (accounts??[])) accountMap[a.student_id] = a;
-
       const studentMap: Record<string, any> = {};
       for (const s of (branchStudents??[])) studentMap[s.id] = s;
-
       const invByStudent: Record<string, any[]> = {};
       for (const inv of (invoices??[])) {
         if (!invByStudent[inv.student_id]) invByStudent[inv.student_id] = [];
         invByStudent[inv.student_id].push(inv);
       }
 
-      return debtorIds
+      const rows = studentIds
         .map((sid:string) => ({
           student: studentMap[sid],
           invoices: invByStudent[sid] ?? [],
-          // Use student_accounts as source of truth for total owed
           cumulative: Number(accountMap[sid]?.total_outstanding ?? 0),
+          totalFees: Number(accountMap[sid]?.total_fees ?? 0),
+          totalPaid: Number(accountMap[sid]?.total_paid ?? 0),
           account: accountMap[sid],
         }))
-        .filter((r:any) => r.cumulative > 0 && r.student)
-        .sort((a:any,b:any) => b.cumulative - a.cumulative);
+        .filter((r:any) => r.student);
+
+      // Sort: owing students first (highest balance), then clear alphabetically
+      return rows.sort((a:any, b:any) => {
+        if (a.cumulative > 0 && b.cumulative === 0) return -1;
+        if (a.cumulative === 0 && b.cumulative > 0) return 1;
+        if (a.cumulative > 0 && b.cumulative > 0) return b.cumulative - a.cumulative;
+        return `${a.student?.first_name} ${a.student?.last_name}`.localeCompare(`${b.student?.first_name} ${b.student?.last_name}`);
+      });
     },
   });
 
@@ -556,9 +557,14 @@ function ArrearsTab() {
     window.open(url,"_blank");
   }
 
-  const rows = (data??[]);
-  const totalArrears = rows.reduce((s:number,r:any)=>s+r.cumulative,0);
-  const totalStudents = rows.length;
+  const allRows = (data??[]);
+  const rows = balanceFilter === "owing" ? allRows.filter((r:any) => r.cumulative > 0)
+             : balanceFilter === "clear"  ? allRows.filter((r:any) => r.cumulative === 0)
+             : allRows;
+  const totalArrears   = allRows.reduce((s:number,r:any) => s + r.cumulative, 0);
+  const totalStudents  = allRows.length;
+  const owingCount     = allRows.filter((r:any) => r.cumulative > 0).length;
+  const clearCount     = allRows.filter((r:any) => r.cumulative === 0).length;
 
   function toggleExpand(id: string) {
     setExpanded(prev => {
@@ -570,10 +576,20 @@ function ArrearsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Total Arrears" value={formatKES(totalArrears)} icon={<AlertCircle className="size-5"/>} tone="danger"/>
-        <StatCard label="Students Owing" value={totalStudents} icon={<Wallet className="size-5"/>} tone="warning"/>
-        <StatCard label="Avg per Student" value={totalStudents ? formatKES(totalArrears/totalStudents) : "—"} icon={<Receipt className="size-5"/>} tone="gold"/>
+        <StatCard label="Owing" value={owingCount} icon={<Wallet className="size-5"/>} tone="warning"/>
+        <StatCard label="Clear" value={clearCount} icon={<Receipt className="size-5"/>} tone="success"/>
+        <StatCard label="Total Students" value={totalStudents} icon={<AlertCircle className="size-5"/>} tone="gold"/>
+      </div>
+      {/* Filter toggle */}
+      <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
+        {([["all","All Students"],["owing","Owing Only"],["clear","Clear Only"]] as const).map(([v,label]) => (
+          <button key={v} onClick={() => setBalanceFilter(v)}
+            className={"px-3 py-1.5 rounded-lg text-xs font-medium transition-all " + (balanceFilter===v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            {label}
+          </button>
+        ))}
       </div>
       <PageCard title="Cumulative Arrears" subtitle="Click a student to see per-period breakdown">
         <div className="space-y-2">
@@ -595,8 +611,10 @@ function ArrearsTab() {
                     {parent && <span className="ml-2 text-xs text-muted-foreground">· {parent.first_name} {parent.last_name}</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-muted-foreground">{row.invoices.length} period{row.invoices.length!==1?"s":""}</span>
-                    <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span>
+                    {row.cumulative === 0
+                      ? <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">✓ Clear</span>
+                      : <><span className="text-xs text-muted-foreground">{row.invoices.length} period{row.invoices.length!==1?"s":""}</span>
+                         <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span></>}
                     <button onClick={(e) => { e.stopPropagation(); buildWhatsApp(row, template); }} disabled={!hasWA}
                       title={hasWA?"Send WhatsApp reminder":"No WhatsApp number registered"}
                       className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border ${hasWA?"bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30 hover:bg-[#25D366]/20":"opacity-30 border-border text-muted-foreground cursor-not-allowed"}`}>
