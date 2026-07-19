@@ -418,6 +418,27 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
           last_payment_date: form.payment_date,
         }).eq("student_id", studentId);
       }
+      // Allocate payment against invoices oldest-first (spec requirement)
+      const { data: openInvoices } = await supabase.from("invoices")
+        .select("id,total_amount,amount_paid,amount_outstanding")
+        .eq("student_id", studentId)
+        .in("status", ["sent","overdue","partially_paid"])
+        .gt("amount_outstanding", 0)
+        .order("period_year",{ascending:true}).order("period_month",{ascending:true});
+      let remaining = amount;
+      for (const inv of (openInvoices??[])) {
+        if (remaining <= 0) break;
+        const owed = Number(inv.amount_outstanding);
+        const applying = Math.min(remaining, owed);
+        const newPaid = Number(inv.amount_paid) + applying;
+        const newOwed = owed - applying;
+        await supabase.from("invoices").update({
+          amount_paid: newPaid,
+          amount_outstanding: newOwed,
+          status: newOwed <= 0 ? "paid" : "partially_paid",
+        }).eq("id", inv.id);
+        remaining -= applying;
+      }
       toast.success("Payment recorded");
       onSaved();
     } catch(e:any) { toast.error(e.message); } finally { setSaving(false); }
@@ -463,33 +484,53 @@ function ArrearsTab() {
     queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
       if (!arrearsBranch) return [];
-      // Step 1: get branch student IDs
+      // Step 1: get branch students with outstanding balance from student_accounts
+      // student_accounts is always up-to-date because every payment updates it
       const { data: branchStudents } = await supabase.from("students")
         .select("id,first_name,last_name,admission_number,student_parents(parents(first_name,last_name,whatsapp,phone))")
         .eq("branch_id", arrearsBranch).eq("status","active");
       const studentIds = (branchStudents??[]).map((s:any)=>s.id);
       if (!studentIds.length) return [];
-      // Step 2: get all unpaid/partial invoices for those students
-      const { data: invoices } = await supabase.from("invoices")
-        .select("id,student_id,invoice_number,period_month,period_year,billing_type,total_amount,amount_paid,amount_outstanding,status,due_date,term_id")
+
+      // Step 2: get student_accounts to find who has outstanding balance
+      // This is the source of truth — updated every time a payment is recorded
+      const { data: accounts } = await supabase.from("student_accounts")
+        .select("student_id,total_outstanding,total_invoiced,total_paid")
         .in("student_id", studentIds)
-        .in("status", ["sent","overdue","partial"])
-        .gt("amount_outstanding", 0)
-        .order("period_year").order("period_month");
-      // Step 3: group by student
-      const byStudent: Record<string, any> = {};
-      for (const s of (branchStudents??[])) {
-        byStudent[s.id] = { student: s, invoices: [], cumulative: 0 };
-      }
+        .gt("total_outstanding", 0);
+
+      const debtorIds = (accounts??[]).map((a:any) => a.student_id);
+      if (!debtorIds.length) return [];
+
+      // Step 3: get their invoices for the period breakdown (oldest first)
+      const { data: invoices } = await supabase.from("invoices")
+        .select("id,student_id,invoice_number,period_month,period_year,billing_type,total_amount,amount_paid,amount_outstanding,status,due_date")
+        .in("student_id", debtorIds)
+        .in("status", ["sent","overdue","partially_paid"])
+        .order("period_year",{ascending:true}).order("period_month",{ascending:true});
+
+      // Step 4: build per-student rows using account balance as authoritative total
+      const accountMap: Record<string, any> = {};
+      for (const a of (accounts??[])) accountMap[a.student_id] = a;
+
+      const studentMap: Record<string, any> = {};
+      for (const s of (branchStudents??[])) studentMap[s.id] = s;
+
+      const invByStudent: Record<string, any[]> = {};
       for (const inv of (invoices??[])) {
-        if (byStudent[inv.student_id]) {
-          byStudent[inv.student_id].invoices.push(inv);
-          byStudent[inv.student_id].cumulative += Number(inv.amount_outstanding);
-        }
+        if (!invByStudent[inv.student_id]) invByStudent[inv.student_id] = [];
+        invByStudent[inv.student_id].push(inv);
       }
-      // Only return students who actually have outstanding invoices
-      return Object.values(byStudent)
-        .filter((r:any) => r.invoices.length > 0)
+
+      return debtorIds
+        .map((sid:string) => ({
+          student: studentMap[sid],
+          invoices: invByStudent[sid] ?? [],
+          // Use student_accounts as source of truth for total owed
+          cumulative: Number(accountMap[sid]?.total_outstanding ?? 0),
+          account: accountMap[sid],
+        }))
+        .filter((r:any) => r.cumulative > 0 && r.student)
         .sort((a:any,b:any) => b.cumulative - a.cumulative);
     },
   });
