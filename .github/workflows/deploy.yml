@@ -1,4 +1,4 @@
-name: Deploy to Netlify
+name: Deploy to Vercel
 
 on:
   push:
@@ -19,19 +19,13 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: npm run build && node scripts/generate-index.js
 
-      - name: Generate index.html
-        run: node scripts/generate-index.js
-
-      - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v3.0
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
         with:
-          publish-dir: './dist/client'
-          production-branch: main
-          production-deploy: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Deploy from GitHub Actions — ${{ github.event.head_commit.message }}"
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: 5fb5dc92-e730-4950-838a-953db339423d
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./
+          vercel-args: '--prod'
