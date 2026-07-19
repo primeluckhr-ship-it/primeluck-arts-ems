@@ -29,16 +29,13 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => { reportLovableError(error, { boundary: "tanstack_root_error_component" }); }, [error]);
-  // Extract the most useful part of the stack trace
-  const stackLines = (error.stack ?? "").split("\n").slice(0, 8).join("\n");
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-lg text-center">
+      <div className="max-w-lg text-center">
         <h1 className="text-xl font-semibold">Something went wrong</h1>
-        <p className="mt-2 text-sm text-red-400 font-mono">{error.message}</p>
-        <pre className="mt-3 text-left text-xs text-muted-foreground bg-muted rounded-lg p-3 overflow-auto max-h-48 whitespace-pre-wrap break-all">{stackLines}</pre>
-        <button
-          onClick={() => { router.invalidate(); reset(); }}
+        <p className="mt-2 text-sm text-muted-foreground font-mono">{error.message}</p>
+        <pre className="mt-3 text-left text-xs text-muted-foreground bg-muted rounded-lg p-3 overflow-auto max-h-56 whitespace-pre-wrap break-all text-[10px]">{(error.stack??'').split('\n').slice(0,10).join('\n')}</pre>
+        <button onClick={() => { router.invalidate(); reset(); }}
           className="mt-4 rounded-md bg-accent text-accent-foreground px-4 py-2 text-sm font-medium"
         >Try again</button>
       </div>
