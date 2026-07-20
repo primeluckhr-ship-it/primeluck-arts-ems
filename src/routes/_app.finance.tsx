@@ -207,6 +207,28 @@ function InvoicesTab() {
       }));
       const { error } = await supabase.from("invoices").insert(rows);
       if (error) throw error;
+
+      // Update student_accounts — ACCUMULATE total_fees and total_outstanding
+      for (const row of rows) {
+        const { data: acct } = await supabase.from("student_accounts")
+          .select("*").eq("student_id", row.student_id).limit(1);
+        if (acct?.[0]) {
+          await supabase.from("student_accounts").update({
+            total_fees: Number(acct[0].total_fees||0) + Number(row.total_amount),
+            total_outstanding: Number(acct[0].total_outstanding||0) + Number(row.total_amount),
+            account_status: "outstanding",
+          }).eq("student_id", row.student_id);
+        } else {
+          await supabase.from("student_accounts").insert({
+            student_id: row.student_id,
+            total_fees: Number(row.total_amount),
+            total_outstanding: Number(row.total_amount),
+            total_paid: 0,
+            account_status: "outstanding",
+          });
+        }
+      }
+
       toast.success(`Generated ${rows.length} invoices`);
       qc.invalidateQueries({queryKey:["invoices-list"]});
     } catch(e:any) { toast.error(e.message); } finally { setGenerating(false); }
@@ -498,17 +520,18 @@ function ArrearsTab() {
         .select("student_id,total_outstanding,total_fees,total_paid,account_status")
         .in("student_id", studentIds);
 
-      // Get outstanding invoices for breakdown
+      // Get ALL invoices for ALL students — every session, every period
       const { data: invoices } = await supabase.from("invoices")
         .select("id,student_id,invoice_number,period_month,period_year,billing_type,total_amount,amount_paid,amount_outstanding,status,due_date")
         .in("student_id", studentIds)
-        .in("status", ["sent","overdue","partially_paid"])
         .order("period_year",{ascending:true}).order("period_month",{ascending:true});
 
       const accountMap: Record<string, any> = {};
       for (const a of (accounts??[])) accountMap[a.student_id] = a;
       const studentMap: Record<string, any> = {};
       for (const s of (branchStudents??[])) studentMap[s.id] = s;
+
+      // Group invoices by student
       const invByStudent: Record<string, any[]> = {};
       for (const inv of (invoices??[])) {
         if (!invByStudent[inv.student_id]) invByStudent[inv.student_id] = [];
@@ -516,14 +539,24 @@ function ArrearsTab() {
       }
 
       const rows = studentIds
-        .map((sid:string) => ({
-          student: studentMap[sid],
-          invoices: invByStudent[sid] ?? [],
-          cumulative: Number(accountMap[sid]?.total_outstanding ?? 0),
-          totalFees: Number(accountMap[sid]?.total_fees ?? 0),
-          totalPaid: Number(accountMap[sid]?.total_paid ?? 0),
-          account: accountMap[sid],
-        }))
+        .map((sid:string) => {
+          const studentInvoices = invByStudent[sid] ?? [];
+          const unpaidInvoices = studentInvoices.filter((i:any) => i.status !== "paid");
+          // TRUE cumulative = sum of outstanding amounts across ALL sessions
+          const invoiceCumulative = unpaidInvoices.reduce((s:number, i:any) => s + Number(i.amount_outstanding||0), 0);
+          // Fall back to student_accounts if no invoices exist yet
+          const accountCumulative = Number(accountMap[sid]?.total_outstanding ?? 0);
+          const cumulative = invoiceCumulative > 0 ? invoiceCumulative : accountCumulative;
+          return {
+            student: studentMap[sid],
+            invoices: studentInvoices,
+            unpaidInvoices,
+            cumulative,
+            totalFees: Number(accountMap[sid]?.total_fees ?? 0),
+            totalPaid: Number(accountMap[sid]?.total_paid ?? 0),
+            account: accountMap[sid],
+          };
+        })
         .filter((r:any) => r.student);
 
       // Sort: owing students first (highest balance), then clear alphabetically
