@@ -717,7 +717,8 @@ function PhotoGallery({ reportId }: { reportId: string }) {
 }
 
 function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () => void; onSaved: () => void }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const formBranch = (user?.role === "super_admin" ? activeBranch : user?.branch_id) ?? "";
   const [form, setForm] = useState({
     student_id: initial?.student_id ?? "",
     course_id: initial?.course_id ?? "",

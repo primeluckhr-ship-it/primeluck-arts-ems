@@ -156,7 +156,7 @@ function AnnouncementsPage() {
       {waAnnouncement && (
         <WhatsAppModal
           announcement={waAnnouncement}
-          branch={branch}
+          branch={branch ?? ""}
           onClose={() => setWaAnnouncement(null)}
         />
       )}
@@ -230,7 +230,7 @@ function AnnouncementsPage() {
           initial={editing}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["announcements"] }); }}
-          branch={branch}
+          branch={branch ?? ""}
         />
       )}
     </div>
@@ -254,10 +254,10 @@ function AnnForm({ initial, onClose, onSaved, branch }: { initial: any; onClose:
       const payload: any = { ...form, created_by: user?.id, branch_id: branch };
       if (initial) {
         await supabase.from("announcements").update(payload).eq("id", initial.id).throwOnError();
-        logAudit({ user_id: user?.id, branch_id: branch, action: "UPDATE", entity_type: "announcement", entity_id: initial.id, description: `Announcement updated: "${form.title}"` });
+        logAudit({ user_id: user?.id, branch_id: branch ?? "", action: "UPDATE", entity_type: "announcement", entity_id: initial.id, description: `Announcement updated: "${form.title}"` });
       } else {
         await supabase.from("announcements").insert(payload).throwOnError();
-        logAudit({ user_id: user?.id, branch_id: branch, action: "CREATE", entity_type: "announcement", description: `Announcement posted: "${form.title}" [${form.priority}]` });
+        logAudit({ user_id: user?.id, branch_id: branch ?? "", action: "CREATE", entity_type: "announcement", description: `Announcement posted: "${form.title}" [${form.priority}]` });
       }
       toast.success("Posted");
       onSaved();

@@ -129,7 +129,7 @@ function FinancePage() {
 
   return (
     <div className="space-y-4">
-      {isAdmin && <ProfitSummary branch={branch} />}
+      {isAdmin && <ProfitSummary branch={branch ?? ""} />}
       <div className="flex gap-1 border-b border-border overflow-x-auto">
         {tabs.map((t) => (
           <button key={t} onClick={() => setTab(t as any)}

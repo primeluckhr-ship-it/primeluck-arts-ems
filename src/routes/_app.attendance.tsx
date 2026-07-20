@@ -164,8 +164,7 @@ function AttendanceSheet({ session, onBack }:{ session:any; onBack:()=>void }) {
       const map:Record<string,string> = {};
       (data??[]).forEach((r:any) => { map[r.student_id] = r.status; });
       return map;
-    },
-    onSuccess: (data:any) => setMarks(data),
+    }
   });
 
   function mark(studentId:string, status:string) {
@@ -242,7 +241,7 @@ function AttendanceSheet({ session, onBack }:{ session:any; onBack:()=>void }) {
         subtitle={session.courses?.per_session_billing ? "✓ Present = auto-charge" : undefined}>
         <div className="space-y-2">
           {(enrolled??[]).map((s:any) => {
-            const current = marks[s.id] ?? existing?.[s.id] ?? "";
+            const current = (marks as Record<string,string>)[s.id] ?? existing?.[s.id] ?? "";
             const billable = ["junior","teen","adult"].includes(s.student_type);
             return (
               <div key={s.id} className="flex items-center gap-3 rounded-lg border border-border p-3">

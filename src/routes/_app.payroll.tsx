@@ -145,7 +145,8 @@ function PayrollPage() {
 }
 
 function PayrollForm({ onClose, onSaved, month, year }:{ onClose:()=>void; onSaved:()=>void; month:number; year:number }) {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const [form, setForm] = useState({ instructor_id:"", sessions_taught:"", base_amount:"", deductions:"0", notes:"" });
   const [saving, setSaving] = useState(false);
   const { data: instructors } = useQuery({ queryKey:["instructors-active"], queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").order("first_name")).data??[] });

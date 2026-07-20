@@ -132,7 +132,7 @@ function ProjectsPage() {
       </PageCard>
 
       {open && (
-        <ProjectForm initial={editing} onClose={() => setOpen(false)}
+        <ProjectForm initial={editing} branch={projectBranch ?? ""} onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["projects-list"] }); }}/>
       )}
     </div>

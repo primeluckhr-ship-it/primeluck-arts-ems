@@ -12,6 +12,8 @@ import { Field, Input } from "./_app.students";
 export const Route = createFileRoute("/_app/programs")({ component: ProgramsPage });
 
 function ProgramsPage() {
+  const { user, activeBranch } = useAuth();
+  const progBranch = user?.role === "super_admin" ? (activeBranch ?? "") : (user?.branch_id ?? "");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const qc = useQueryClient();
@@ -82,6 +84,7 @@ function ProgramsPage() {
       {open && (
         <ProgramForm
           initial={editing}
+          branch={progBranch}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["programs-list"] }); }}
         />
@@ -100,7 +103,6 @@ function ProgramForm({ initial, branch, onClose, onSaved }: { initial: any; bran
     term_fee: initial?.term_fee ?? "",
     max_students: initial?.max_students ?? "",
     status: initial?.status ?? "active",
-    category: initial?.category ?? "general",
   });
   const [saving, setSaving] = useState(false);
   const { user } = useAuth();

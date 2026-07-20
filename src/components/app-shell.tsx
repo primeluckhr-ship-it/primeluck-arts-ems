@@ -20,7 +20,7 @@ const NAV: Item[] = [
   { to: "/courses", label: "Courses", icon: <BookOpen className="size-5" />, roles: ["super_admin","teacher","instructor","dice_admin"] },
   { to: "/schedule", label: "My Schedule", icon: <CalendarDays className="size-5" />, roles: ["student"] },
   { to: "/children", label: "My Children", icon: <Baby className="size-5" />, roles: ["parent"] },
-  { to: "/timetable", label: "Timetable", roles: ["super_admin","finance_admin","teacher","instructor","dice_admin"] },
+  { to: "/timetable", label: "Timetable", roles: ["super_admin","finance_admin","teacher","instructor","dice_admin"], icon: "" },
     { to: "/attendance", label: "Attendance", icon: <CalendarCheck className="size-5" />, roles: ["super_admin","teacher","instructor","student","dice_admin"] },
   { to: "/finance", label: "Finance", icon: <Wallet className="size-5" />, roles: ["super_admin","finance_admin","dice_admin"] },
   { to: "/account", label: "Fee Account", icon: <Receipt className="size-5" />, roles: ["parent","student"] },
@@ -34,8 +34,8 @@ const NAV: Item[] = [
   { to: "/lessons", label: "Lessons & Reports", icon: <BookOpenCheck className="size-5" />, roles: ["super_admin","dice_admin","teacher","instructor"] },
   { to: "/dice-institutions", label: "Partner Schools", icon: <Building2 className="size-5" />, roles: ["super_admin","dice_admin","finance_admin"] },
   { to: "/reviews", label: "Feedback & Reviews", icon: <MessageSquare className="size-5" />, roles: ["super_admin","finance_admin","dice_admin"] },
-  { to: "/payroll", label: "Payroll", roles: ["super_admin","finance_admin","dice_admin"] },
-    { to: "/inventory", label: "Inventory", roles: ["super_admin","finance_admin","dice_admin"] },
+  { to: "/payroll", label: "Payroll", roles: ["super_admin","finance_admin","dice_admin"], icon: "" },
+    { to: "/inventory", label: "Inventory", roles: ["super_admin","finance_admin","dice_admin"], icon: "" },
     { to: "/fund-requests", label: "Fund Requests", icon: <ClipboardCheck className="size-5" />, roles: ["super_admin","finance_admin","teacher","instructor","dice_admin"] },
 ];
 

@@ -284,6 +284,7 @@ function PortfolioPage() {
       {open && (
         <ArtworkForm
           students={students ?? []}
+          branch={portfolioBranch ?? ""}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["portfolio-artworks"] }); }}
         />

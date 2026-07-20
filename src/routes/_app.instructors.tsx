@@ -153,7 +153,7 @@ function InstructorsPage() {
       </PageCard>
 
       {open && (
-        <InstructorForm initial={editing} branch={branch} onClose={() => setOpen(false)}
+        <InstructorForm initial={editing} branch={branch ?? ""} onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["instructors-full"] }); }}/>
       )}
     </div>
