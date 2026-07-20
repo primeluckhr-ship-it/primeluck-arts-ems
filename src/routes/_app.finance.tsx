@@ -498,67 +498,71 @@ function PaymentForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void }
 /* ── ARREARS ── */
 function ArrearsTab() {
   const { user, activeBranch } = useAuth();
-  const arrearsBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+  const arrearsBranch = user?.role === "super_admin" ? (activeBranch ?? "") : (user?.branch_id ?? "");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*")).data??[] });
-
   const [balanceFilter, setBalanceFilter] = useState<"all"|"owing"|"clear">("all");
 
-  const { data } = useQuery({
+  const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*").eq("type","arrears")).data??[] });
+  const toast_fn = toast;
+
+  const { data, isLoading } = useQuery({
     queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
       if (!arrearsBranch) return [];
 
-      // 1. Active students with parents
+      // Active students with parent contacts
       const { data: branchStudents } = await supabase.from("students")
         .select("id,first_name,last_name,admission_number,enrollment_date,student_parents(parents(first_name,last_name,whatsapp,phone))")
         .eq("branch_id", arrearsBranch).eq("status","active");
       const studentIds = (branchStudents??[]).map((s:any)=>s.id);
       if (!studentIds.length) return [];
 
-      // 2. Monthly fee from course enrollments
+      // Monthly fee per student from course enrollments
       const { data: enrollments } = await supabase.from("course_enrollments")
         .select("student_id,fee_override,courses(monthly_fee)")
         .in("student_id", studentIds);
 
-      // 3. All sessions with dates
+      // All sessions with dates for this branch's courses
       const { data: allSessions } = await supabase.from("sessions")
-        .select("id,course_id,session_date").order("session_date",{ascending:true});
+        .select("id,session_date,course_id")
+        .order("session_date",{ascending:true});
 
-      // 4. Attendance records to determine months attended
-      const { data: attendanceRecs } = await supabase.from("attendance_records")
-        .select("student_id,session_id,status").in("student_id", studentIds);
+      // ONLY PRESENT attendance — absences do not generate fees
+      const { data: presentRecs } = await supabase.from("attendance_records")
+        .select("student_id,session_id")
+        .in("student_id", studentIds)
+        .eq("status","present");
 
-      // 5. Payments made
+      // Payments already made
       const { data: accounts } = await supabase.from("student_accounts")
-        .select("student_id,total_paid,total_outstanding").in("student_id", studentIds);
+        .select("student_id,total_paid")
+        .in("student_id", studentIds);
 
-      // 6. Existing invoices for period breakdown
+      // Formal invoices if generated
       const { data: invoices } = await supabase.from("invoices")
         .select("id,student_id,invoice_number,period_month,period_year,total_amount,amount_paid,amount_outstanding,status,due_date")
         .in("student_id", studentIds)
         .order("period_year",{ascending:true}).order("period_month",{ascending:true});
 
+      // Maps
       const studentMap: Record<string,any> = {};
       for (const s of (branchStudents??[])) studentMap[s.id] = s;
 
       const feeMap: Record<string,number> = {};
       for (const e of (enrollments??[])) {
-        const fee = Number(e.fee_override ?? (e.courses as any)?.monthly_fee ?? 0);
+        const fee = Number((e as any).fee_override ?? (e.courses as any)?.monthly_fee ?? 0);
         if (fee > (feeMap[e.student_id]??0)) feeMap[e.student_id] = fee;
       }
 
-      const sessionMap: Record<string,any> = {};
-      for (const sess of (allSessions??[])) sessionMap[sess.id] = sess;
-
-      const attendedSessions: Record<string,Set<string>> = {};
-      for (const ar of (attendanceRecs??[])) {
-        if (!attendedSessions[ar.student_id]) attendedSessions[ar.student_id] = new Set();
-        attendedSessions[ar.student_id].add(ar.session_id);
+      const sessionMap: Record<string,{month:number;year:number}> = {};
+      for (const sess of (allSessions??[])) {
+        if (!sess.session_date) continue;
+        const d = new Date(sess.session_date);
+        sessionMap[sess.id] = {month:d.getMonth()+1, year:d.getFullYear()};
       }
 
-      const accountMap: Record<string,any> = {};
-      for (const a of (accounts??[])) accountMap[a.student_id] = a;
+      const paidMap: Record<string,number> = {};
+      for (const a of (accounts??[])) paidMap[a.student_id] = Number((a as any).total_paid ?? 0);
 
       const invByStudent: Record<string,any[]> = {};
       for (const inv of (invoices??[])) {
@@ -566,34 +570,35 @@ function ArrearsTab() {
         invByStudent[inv.student_id].push(inv);
       }
 
+      // Group PRESENT sessions by student → unique month
+      const presentMonths: Record<string, Map<string,{month:number;year:number;sessions:number}>> = {};
+      for (const ar of (presentRecs??[])) {
+        const sess = sessionMap[ar.session_id];
+        if (!sess) continue;
+        if (!presentMonths[ar.student_id]) presentMonths[ar.student_id] = new Map();
+        const key = `${sess.year}-${String(sess.month).padStart(2,"0")}`;
+        const cur = presentMonths[ar.student_id].get(key);
+        if (cur) cur.sessions++;
+        else presentMonths[ar.student_id].set(key, {month:sess.month, year:sess.year, sessions:1});
+      }
+
       const MN = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
       const rows = studentIds.map((sid:string) => {
         const student = studentMap[sid];
         const monthlyFee = feeMap[sid] ?? 0;
-        const totalPaid = Number(accountMap[sid]?.total_paid ?? 0);
-        const studentSessions = attendedSessions[sid] ?? new Set<string>();
+        const totalPaid = paidMap[sid] ?? 0;
+        const existingInvoices = invByStudent[sid] ?? [];
 
-        // Build month attendance map from session dates
-        const monthMap = new Map<string,{month:number;year:number;sessions:number}>();
-        for (const sessId of studentSessions) {
-          const sess = sessionMap[sessId];
-          if (!sess?.session_date) continue;
-          const d = new Date(sess.session_date);
-          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-          if (!monthMap.has(key)) monthMap.set(key,{month:d.getMonth()+1,year:d.getFullYear(),sessions:0});
-          monthMap.get(key)!.sessions++;
-        }
-
-        const periods = Array.from(monthMap.values())
-          .sort((a,b)=>a.year!==b.year?a.year-b.year:a.month-b.month)
+        // Periods = months where student was marked PRESENT at least once
+        const periods = Array.from((presentMonths[sid] ?? new Map()).values())
+          .sort((a,b)=> a.year!==b.year ? a.year-b.year : a.month-b.month)
           .map(p=>({label:`${MN[p.month]} ${p.year}`,month:p.month,year:p.year,sessions:p.sessions,amount:monthlyFee}));
 
-        // True balance from attendance: months × fee − paid
+        // Cumulative = months present × fee − paid
         const attendanceCumulative = Math.max(0, periods.length * monthlyFee - totalPaid);
 
-        // Use invoices if generated, else attendance-based
-        const existingInvoices = invByStudent[sid] ?? [];
+        // Prefer invoices when generated (formal), else attendance-based
         const invoiceCumulative = existingInvoices
           .filter((i:any)=>i.status!=="paid")
           .reduce((s:number,i:any)=>s+Number(i.amount_outstanding||0),0);
@@ -601,10 +606,10 @@ function ArrearsTab() {
         const cumulative = existingInvoices.length > 0 ? invoiceCumulative : attendanceCumulative;
 
         return {
-          student, invoices: existingInvoices, periods,
+          student, invoices:existingInvoices, periods,
           cumulative, monthlyFee, totalPaid,
-          monthsAttended: periods.length,
-          totalOwed: periods.length * monthlyFee,
+          monthsPresent:periods.length,
+          totalOwed:periods.length * monthlyFee,
         };
       }).filter((r:any)=>r.student);
 
@@ -612,133 +617,138 @@ function ArrearsTab() {
         if (a.cumulative>0&&b.cumulative===0) return -1;
         if (a.cumulative===0&&b.cumulative>0) return 1;
         if (a.cumulative>0&&b.cumulative>0) return b.cumulative-a.cumulative;
-        return `${a.student?.first_name} ${a.student?.last_name}`.localeCompare(`${b.student?.first_name} ${b.student?.last_name}`);
+        return `${a.student?.first_name??""} ${a.student?.last_name??""}`.localeCompare(`${b.student?.first_name??""} ${b.student?.last_name??""}`);
       });
     },
   });
-  const MONTHS = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-  function buildWhatsApp(row:any, template:any) {
-    const student = row.student;
-    const parent = student?.student_parents?.[0]?.parents;
-    const phone = (parent?.whatsapp || parent?.phone || "").replace(/\D/g,"");
-    if (!phone) { toast.error("No WhatsApp number for this student's parent"); return; }
-    const breakdown = row.invoices.map((inv:any) =>
-      `${inv.period_month ? `${MONTHS[inv.period_month]} ${inv.period_year}` : `Invoice ${inv.invoice_number}`}: KES ${Number(inv.amount_outstanding).toLocaleString("en-KE")}`
-    ).join("\n");
-    const body = (template?.body ?? "Dear parent, your child {{student_name}} has outstanding fees of KES {{amount}}. Breakdown:\n{{breakdown}}. Please settle at your earliest convenience.")
-      .replace("{{student_name}}", `${student?.first_name} ${student?.last_name}`)
-      .replace("{{amount}}", row.cumulative.toLocaleString("en-KE"))
-      .replace("{{period}}", format(new Date(),"MMMM yyyy"))
-      .replace("{{breakdown}}", breakdown)
-      .replace("{{term}}", "Current Term")
-      .replace("{{due_date}}", "5th of this month");
-    const url = `https://wa.me/${phone.startsWith("0") ? "254"+phone.slice(1) : phone}?text=${encodeURIComponent(body)}`;
-    window.open(url,"_blank");
-  }
 
   const allRows = (data??[]);
-  const rows = balanceFilter === "owing" ? allRows.filter((r:any) => r.cumulative > 0)
-             : balanceFilter === "clear"  ? allRows.filter((r:any) => r.cumulative === 0)
+  const rows = balanceFilter==="owing" ? allRows.filter((r:any)=>r.cumulative>0)
+             : balanceFilter==="clear"  ? allRows.filter((r:any)=>r.cumulative===0)
              : allRows;
-  const totalArrears   = allRows.reduce((s:number,r:any) => s + r.cumulative, 0);
-  const totalStudents  = allRows.length;
-  const owingCount     = allRows.filter((r:any) => r.cumulative > 0).length;
-  const clearCount     = allRows.filter((r:any) => r.cumulative === 0).length;
+  const totalArrears  = allRows.reduce((s:number,r:any)=>s+r.cumulative,0);
+  const totalStudents = allRows.length;
+  const owingCount    = allRows.filter((r:any)=>r.cumulative>0).length;
+  const clearCount    = allRows.filter((r:any)=>r.cumulative===0).length;
 
-  function toggleExpand(id: string) {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const MNS = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  function buildWhatsApp(row:any) {
+    const student = row.student;
+    const parent = student?.student_parents?.[0]?.parents;
+    const phone = (parent?.whatsapp||parent?.phone||"").replace(/\D/g,"");
+    if (!phone) { toast_fn.error("No WhatsApp number for this student's parent"); return; }
+    const breakdown = row.periods.length > 0
+      ? row.periods.map((p:any)=>`${p.label}: KES ${Number(p.amount).toLocaleString("en-KE")}`).join("\n")
+      : row.invoices.map((inv:any)=>`${inv.period_month?`${MNS[inv.period_month]} ${inv.period_year}`:`Invoice ${inv.invoice_number}`}: KES ${Number(inv.amount_outstanding).toLocaleString("en-KE")}`).join("\n");
+    const msg = templates?.[0]
+      ? (templates[0].body||"").replace("{student}",student?.first_name||"").replace("{amount}",`KES ${Number(row.cumulative).toLocaleString("en-KE")}`).replace("{breakdown}",breakdown)
+      : `Hello ${parent?.first_name||"Parent"}, ${student?.first_name||"your child"} has an outstanding balance of KES ${Number(row.cumulative).toLocaleString("en-KE")}.\n\n${breakdown}\n\nPlease make payment at your earliest convenience.`;
+    const num = phone.startsWith("0")?"254"+phone.slice(1):phone;
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`,"_blank");
   }
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total Arrears" value={formatKES(totalArrears)} icon={<AlertCircle className="size-5"/>} tone="danger"/>
-        <StatCard label="Owing" value={owingCount} icon={<Wallet className="size-5"/>} tone="warning"/>
-        <StatCard label="Clear" value={clearCount} icon={<Receipt className="size-5"/>} tone="success"/>
-        <StatCard label="Total Students" value={totalStudents} icon={<AlertCircle className="size-5"/>} tone="gold"/>
+        <StatCard label="Total Arrears"   value={formatKES(totalArrears)}  icon={<AlertCircle className="size-5"/>} tone="danger"/>
+        <StatCard label="Owing"           value={owingCount}               icon={<Wallet className="size-5"/>}      tone="warning"/>
+        <StatCard label="Clear"           value={clearCount}               icon={<Receipt className="size-5"/>}     tone="success"/>
+        <StatCard label="Total Students"  value={totalStudents}            icon={<AlertCircle className="size-5"/>} tone="gold"/>
       </div>
-      {/* Filter toggle */}
+
       <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
-        {([["all","All Students"],["owing","Owing Only"],["clear","Clear Only"]] as const).map(([v,label]) => (
-          <button key={v} onClick={() => setBalanceFilter(v)}
-            className={"px-3 py-1.5 rounded-lg text-xs font-medium transition-all " + (balanceFilter===v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-            {label}
+        {(["all","owing","clear"] as const).map(v=>(
+          <button key={v} onClick={()=>setBalanceFilter(v)}
+            className={"px-3 py-1.5 rounded-lg text-xs font-medium transition-all "+(balanceFilter===v?"bg-card text-foreground shadow-sm":"text-muted-foreground hover:text-foreground")}>
+            {v==="all"?"All Students":v==="owing"?"Owing Only":"Clear Only"}
           </button>
         ))}
       </div>
-      <PageCard title="Cumulative Arrears" subtitle="Click a student to see per-period breakdown">
-        <div className="space-y-2">
-          {rows.map((row:any) => {
-            const s = row.student;
-            const parent = s?.student_parents?.[0]?.parents;
+
+      <PageCard title="Cumulative Arrears" subtitle="Click a student to see per-month breakdown">
+        {isLoading && <div className="py-8 text-center text-muted-foreground text-sm">Loading…</div>}
+        <div className="space-y-1">
+          {rows.map((row:any)=>{
+            const sid = row.student?.id;
+            const isOpen = expanded.has(sid);
+            const parent = row.student?.student_parents?.[0]?.parents;
             const hasWA = !!(parent?.whatsapp||parent?.phone);
-            const template = (templates??[]).find((t:any)=>t.category==="arrears");
-            const isOpen = expanded.has(s.id);
             return (
-              <div key={s.id} className="border border-border rounded-lg overflow-hidden">
-                {/* Student row — click to expand */}
-                <div className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30"
-                  onClick={() => toggleExpand(s.id)}>
-                  <span className="text-muted-foreground text-xs w-4">{isOpen ? "▾" : "▸"}</span>
+              <div key={sid} className="rounded-lg border border-border/60 overflow-hidden">
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 text-left"
+                  onClick={()=>{ const n=new Set(expanded); isOpen?n.delete(sid):n.add(sid); setExpanded(n); }}>
+                  <span className="text-muted-foreground text-xs">›</span>
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium text-sm">{s.first_name} {s.last_name}</span>
-                    <span className="ml-2 font-mono text-xs text-muted-foreground">{s.admission_number}</span>
-                    {parent && <span className="ml-2 text-xs text-muted-foreground">· {parent.first_name} {parent.last_name}</span>}
+                    <span className="font-medium text-sm">{row.student?.first_name} {row.student?.last_name}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{row.student?.admission_number}</span>
+                    {parent && <span className="text-xs text-muted-foreground ml-2">· {parent.first_name}</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {row.cumulative === 0
+                    {row.cumulative===0
                       ? <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">✓ Clear</span>
-                      : <><span className="text-xs text-muted-foreground">{row.monthsAttended||row.invoices.length} month{(row.monthsAttended||row.invoices.length)!==1?"s":""}</span>
+                      : <><span className="text-xs text-muted-foreground">{row.monthsPresent} month{row.monthsPresent!==1?"s":""}</span>
                          <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span></>}
-                    <button onClick={(e) => { e.stopPropagation(); buildWhatsApp(row, template); }} disabled={!hasWA}
-                      title={hasWA?"Send WhatsApp reminder":"No WhatsApp number registered"}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border ${hasWA?"bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30 hover:bg-[#25D366]/20":"opacity-30 border-border text-muted-foreground cursor-not-allowed"}`}>
-                      <MessageCircle className="size-3"/>WA
+                    <button
+                      onClick={e=>{e.stopPropagation(); buildWhatsApp(row);}}
+                      className={"px-2 py-1 rounded text-xs font-medium "+(hasWA?"bg-[#25D366] text-white":"bg-muted text-muted-foreground")}>
+                      WA
                     </button>
                   </div>
-                </div>
-                {/* Per-period breakdown */}
+                </button>
                 {isOpen && (
-                  <div className="border-t border-border bg-muted/20 px-3 py-2 space-y-1">
-                    {row.invoices.map((inv:any) => (
-                      <div key={inv.id} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-muted-foreground w-24">{inv.invoice_number}</span>
-                          <span className="font-medium">
-                            {inv.period_month ? `${MONTHS[inv.period_month]} ${inv.period_year}` : `Invoice`}
-                          </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${inv.status==="overdue"?"bg-danger/15 text-danger":inv.status==="partial"?"bg-warning/15 text-warning":"bg-muted text-muted-foreground"}`}>
-                            {inv.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4 text-right shrink-0">
-                          <span className="text-muted-foreground">Billed: {formatKES(inv.total_amount)}</span>
-                          {Number(inv.amount_paid) > 0 && <span className="text-success">Paid: {formatKES(inv.amount_paid)}</span>}
-                          <span className="font-bold text-danger w-24 text-right">Owed: {formatKES(inv.amount_outstanding)}</span>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="flex justify-end pt-1 font-semibold text-sm text-danger">
-                      Total owed: {formatKES(row.cumulative)}
+                  <div className="px-4 pb-3 pt-0 border-t border-border/40 bg-muted/20">
+                    <div className="text-xs text-muted-foreground mb-2 mt-2">
+                      Monthly fee: {formatKES(row.monthlyFee)} · Paid: {formatKES(row.totalPaid)}
                     </div>
+                    <div className="space-y-1">
+                      {(row.invoices.length>0 ? row.invoices : row.periods).map((item:any,i:number)=>{
+                        const isInv = !!item.invoice_number;
+                        const label = isInv
+                          ? (item.period_month?`${MNS[item.period_month]} ${item.period_year}`:`Inv ${item.invoice_number}`)
+                          : item.label;
+                        const amount = isInv ? Number(item.amount_outstanding) : Number(item.amount);
+                        const paid = isInv && item.status==="paid";
+                        return (
+                          <div key={i} className="flex justify-between text-xs py-1 border-b border-border/30 last:border-0">
+                            <span className="text-muted-foreground">
+                              {label}
+                              {!isInv&&<span className="ml-1 opacity-60">({item.sessions} session{item.sessions!==1?"s":""})</span>}
+                            </span>
+                            <span className={paid?"text-success":"text-danger font-medium"}>
+                              {paid?"Paid":`KES ${amount.toLocaleString("en-KE")}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {row.periods.length===0&&row.invoices.length===0&&(
+                        <div className="text-xs text-muted-foreground py-2">No attendance records — not yet marked present in any session</div>
+                      )}
+                    </div>
+                    {row.totalPaid>0&&(
+                      <div className="flex justify-between text-xs mt-2 pt-2 border-t border-border font-semibold">
+                        <span className="text-success">Total Paid</span>
+                        <span className="text-success">{formatKES(row.totalPaid)}</span>
+                      </div>
+                    )}
+                    {row.invoices.length===0&&row.periods.length>0&&(
+                      <p className="text-xs text-muted-foreground/60 mt-2">From attendance records · Generate invoices to formalise</p>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
-          {!rows.length && (
-            <div className="py-10 text-center text-muted-foreground">No outstanding arrears 🎉</div>
+          {!isLoading&&!rows.length&&(
+            <div className="py-8 text-center text-muted-foreground text-sm">No students found 🎉</div>
           )}
         </div>
       </PageCard>
     </div>
   );
 }
+
 
 /* ── EXPENDITURE ── */
 function ExpenditureTab() {
