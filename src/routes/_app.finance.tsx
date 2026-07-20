@@ -502,118 +502,99 @@ function ArrearsTab() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [balanceFilter, setBalanceFilter] = useState<"all"|"owing"|"clear">("all");
 
-  const { data: templates } = useQuery({ queryKey:["wa-templates"], queryFn: async () => (await supabase.from("whatsapp_templates").select("*").eq("type","arrears")).data??[] });
-  const toast_fn = toast;
-
   const { data, isLoading } = useQuery({
     queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
       if (!arrearsBranch) return [];
 
-      // Active students with parent contacts
+      // 1. Active students with parent contacts
       const { data: branchStudents } = await supabase.from("students")
-        .select("id,first_name,last_name,admission_number,enrollment_date,student_parents(parents(first_name,last_name,whatsapp,phone))")
+        .select("id,first_name,last_name,admission_number,student_parents(parents(first_name,last_name,whatsapp,phone))")
         .eq("branch_id", arrearsBranch).eq("status","active");
-      const studentIds = (branchStudents??[]).map((s:any)=>s.id);
+      const studentIds = (branchStudents??[]).map((s:any) => s.id);
       if (!studentIds.length) return [];
 
-      // Monthly fee per student from course enrollments
+      // 2. Course enrollment + SESSION FEE (per_session_billing)
       const { data: enrollments } = await supabase.from("course_enrollments")
-        .select("student_id,fee_override,courses(monthly_fee)")
+        .select("student_id,fee_override,courses(id,name,session_fee,per_session_billing,monthly_fee,billing_cycle)")
         .in("student_id", studentIds);
 
-      // All sessions with dates for this branch's courses
+      // 3. All sessions for this branch
       const { data: allSessions } = await supabase.from("sessions")
-        .select("id,session_date,course_id")
+        .select("id,session_date,start_time,course_id")
+        .in("course_id", [...new Set((enrollments??[]).map((e:any) => e.courses?.id).filter(Boolean))])
         .order("session_date",{ascending:true});
 
-      // ONLY PRESENT attendance — absences do not generate fees
+      // 4. PRESENT attendance only — this drives the fee
       const { data: presentRecs } = await supabase.from("attendance_records")
         .select("student_id,session_id")
         .in("student_id", studentIds)
         .eq("status","present");
 
-      // Payments already made
+      // 5. Payments made
       const { data: accounts } = await supabase.from("student_accounts")
-        .select("student_id,total_paid")
-        .in("student_id", studentIds);
-
-      // Formal invoices if generated
-      const { data: invoices } = await supabase.from("invoices")
-        .select("id,student_id,invoice_number,period_month,period_year,total_amount,amount_paid,amount_outstanding,status,due_date")
-        .in("student_id", studentIds)
-        .order("period_year",{ascending:true}).order("period_month",{ascending:true});
+        .select("student_id,total_paid").in("student_id", studentIds);
 
       // Maps
       const studentMap: Record<string,any> = {};
       for (const s of (branchStudents??[])) studentMap[s.id] = s;
 
+      // Per student: session fee (prefer per_session fee, fallback monthly/12)
       const feeMap: Record<string,number> = {};
+      const billingMap: Record<string,string> = {};
       for (const e of (enrollments??[])) {
-        const fee = Number((e as any).fee_override ?? (e.courses as any)?.monthly_fee ?? 0);
-        if (fee > (feeMap[e.student_id]??0)) feeMap[e.student_id] = fee;
+        const c = e.courses as any;
+        const isPerSession = c?.per_session_billing || c?.billing_cycle === "per_session";
+        const fee = isPerSession
+          ? Number(e.fee_override ?? c?.session_fee ?? 0)
+          : Number(e.fee_override ?? c?.monthly_fee ?? 0);
+        if (fee > (feeMap[e.student_id]??0)) {
+          feeMap[e.student_id] = fee;
+          billingMap[e.student_id] = isPerSession ? "per_session" : "monthly";
+        }
       }
 
-      const sessionMap: Record<string,{month:number;year:number}> = {};
+      const sessionMap: Record<string,{date:string;time:string}> = {};
       for (const sess of (allSessions??[])) {
-        if (!sess.session_date) continue;
-        const d = new Date(sess.session_date);
-        sessionMap[sess.id] = {month:d.getMonth()+1, year:d.getFullYear()};
+        sessionMap[sess.id] = {
+          date: sess.session_date,
+          time: (sess.start_time||"").substring(0,5)
+        };
       }
 
       const paidMap: Record<string,number> = {};
       for (const a of (accounts??[])) paidMap[a.student_id] = Number((a as any).total_paid ?? 0);
 
-      const invByStudent: Record<string,any[]> = {};
-      for (const inv of (invoices??[])) {
-        if (!invByStudent[inv.student_id]) invByStudent[inv.student_id] = [];
-        invByStudent[inv.student_id].push(inv);
-      }
-
-      // Group PRESENT sessions by student → unique month
-      const presentMonths: Record<string, Map<string,{month:number;year:number;sessions:number}>> = {};
+      // Group PRESENT sessions per student
+      const presentSessions: Record<string,Array<{date:string;time:string}>> = {};
       for (const ar of (presentRecs??[])) {
         const sess = sessionMap[ar.session_id];
         if (!sess) continue;
-        if (!presentMonths[ar.student_id]) presentMonths[ar.student_id] = new Map();
-        const key = `${sess.year}-${String(sess.month).padStart(2,"0")}`;
-        const cur = presentMonths[ar.student_id].get(key);
-        if (cur) cur.sessions++;
-        else presentMonths[ar.student_id].set(key, {month:sess.month, year:sess.year, sessions:1});
+        if (!presentSessions[ar.student_id]) presentSessions[ar.student_id] = [];
+        presentSessions[ar.student_id].push(sess);
       }
-
-      const MN = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
       const rows = studentIds.map((sid:string) => {
         const student = studentMap[sid];
-        const monthlyFee = feeMap[sid] ?? 0;
+        const sessionFee = feeMap[sid] ?? 0;
+        const billing = billingMap[sid] ?? "per_session";
         const totalPaid = paidMap[sid] ?? 0;
-        const existingInvoices = invByStudent[sid] ?? [];
+        const sessions = (presentSessions[sid] ?? [])
+          .sort((a,b) => a.date.localeCompare(b.date));
 
-        // Periods = months where student was marked PRESENT at least once
-        const periods = Array.from((presentMonths[sid] ?? new Map()).values())
-          .sort((a,b)=> a.year!==b.year ? a.year-b.year : a.month-b.month)
-          .map(p=>({label:`${MN[p.month]} ${p.year}`,month:p.month,year:p.year,sessions:p.sessions,amount:monthlyFee}));
-
-        // Cumulative = months present × fee − paid
-        const attendanceCumulative = Math.max(0, periods.length * monthlyFee - totalPaid);
-
-        // Prefer invoices when generated (formal), else attendance-based
-        const invoiceCumulative = existingInvoices
-          .filter((i:any)=>i.status!=="paid")
-          .reduce((s:number,i:any)=>s+Number(i.amount_outstanding||0),0);
-
-        const cumulative = existingInvoices.length > 0 ? invoiceCumulative : attendanceCumulative;
+        // Cumulative = sessions attended × session fee − paid
+        const totalOwed = sessions.length * sessionFee;
+        const cumulative = Math.max(0, totalOwed - totalPaid);
 
         return {
-          student, invoices:existingInvoices, periods,
-          cumulative, monthlyFee, totalPaid,
-          monthsPresent:periods.length,
-          totalOwed:periods.length * monthlyFee,
+          student, sessions, cumulative,
+          sessionFee, billing, totalPaid,
+          sessionCount: sessions.length,
+          totalOwed,
         };
-      }).filter((r:any)=>r.student);
+      }).filter((r:any) => r.student);
 
-      return rows.sort((a:any,b:any)=>{
+      return rows.sort((a:any,b:any) => {
         if (a.cumulative>0&&b.cumulative===0) return -1;
         if (a.cumulative===0&&b.cumulative>0) return 1;
         if (a.cumulative>0&&b.cumulative>0) return b.cumulative-a.cumulative;
@@ -627,23 +608,18 @@ function ArrearsTab() {
              : balanceFilter==="clear"  ? allRows.filter((r:any)=>r.cumulative===0)
              : allRows;
   const totalArrears  = allRows.reduce((s:number,r:any)=>s+r.cumulative,0);
-  const totalStudents = allRows.length;
   const owingCount    = allRows.filter((r:any)=>r.cumulative>0).length;
   const clearCount    = allRows.filter((r:any)=>r.cumulative===0).length;
+  const totalStudents = allRows.length;
 
-  const MNS = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-  function buildWhatsApp(row:any) {
-    const student = row.student;
-    const parent = student?.student_parents?.[0]?.parents;
+  function sendWhatsApp(row:any) {
+    const parent = row.student?.student_parents?.[0]?.parents;
     const phone = (parent?.whatsapp||parent?.phone||"").replace(/\D/g,"");
-    if (!phone) { toast_fn.error("No WhatsApp number for this student's parent"); return; }
-    const breakdown = row.periods.length > 0
-      ? row.periods.map((p:any)=>`${p.label}: KES ${Number(p.amount).toLocaleString("en-KE")}`).join("\n")
-      : row.invoices.map((inv:any)=>`${inv.period_month?`${MNS[inv.period_month]} ${inv.period_year}`:`Invoice ${inv.invoice_number}`}: KES ${Number(inv.amount_outstanding).toLocaleString("en-KE")}`).join("\n");
-    const msg = templates?.[0]
-      ? (templates[0].body||"").replace("{student}",student?.first_name||"").replace("{amount}",`KES ${Number(row.cumulative).toLocaleString("en-KE")}`).replace("{breakdown}",breakdown)
-      : `Hello ${parent?.first_name||"Parent"}, ${student?.first_name||"your child"} has an outstanding balance of KES ${Number(row.cumulative).toLocaleString("en-KE")}.\n\n${breakdown}\n\nPlease make payment at your earliest convenience.`;
+    if (!phone) { toast.error("No WhatsApp number"); return; }
+    const breakdown = row.sessions.map((s:any)=>
+      `  • ${s.date} ${s.time} — KES ${Number(row.sessionFee).toLocaleString("en-KE")}`
+    ).join("\n");
+    const msg = `Hello ${parent?.first_name||"Parent"},\n\n${row.student?.first_name} has an outstanding balance of KES ${Number(row.cumulative).toLocaleString("en-KE")}.\n\nSessions attended:\n${breakdown}\n\nTotal owed: KES ${Number(row.totalOwed).toLocaleString("en-KE")}\nPaid: KES ${Number(row.totalPaid).toLocaleString("en-KE")}\nBalance: KES ${Number(row.cumulative).toLocaleString("en-KE")}\n\nPlease make payment at your earliest convenience. Thank you!`;
     const num = phone.startsWith("0")?"254"+phone.slice(1):phone;
     window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`,"_blank");
   }
@@ -651,10 +627,10 @@ function ArrearsTab() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total Arrears"   value={formatKES(totalArrears)}  icon={<AlertCircle className="size-5"/>} tone="danger"/>
-        <StatCard label="Owing"           value={owingCount}               icon={<Wallet className="size-5"/>}      tone="warning"/>
-        <StatCard label="Clear"           value={clearCount}               icon={<Receipt className="size-5"/>}     tone="success"/>
-        <StatCard label="Total Students"  value={totalStudents}            icon={<AlertCircle className="size-5"/>} tone="gold"/>
+        <StatCard label="Total Arrears"  value={formatKES(totalArrears)} icon={<AlertCircle className="size-5"/>} tone="danger"/>
+        <StatCard label="Owing"          value={owingCount}              icon={<Wallet className="size-5"/>}      tone="warning"/>
+        <StatCard label="Clear"          value={clearCount}              icon={<Receipt className="size-5"/>}     tone="success"/>
+        <StatCard label="Total Students" value={totalStudents}           icon={<AlertCircle className="size-5"/>} tone="gold"/>
       </div>
 
       <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
@@ -666,7 +642,7 @@ function ArrearsTab() {
         ))}
       </div>
 
-      <PageCard title="Cumulative Arrears" subtitle="Click a student to see per-month breakdown">
+      <PageCard title="Cumulative Arrears" subtitle="Calculated from attendance — only sessions marked Present are charged">
         {isLoading && <div className="py-8 text-center text-muted-foreground text-sm">Loading…</div>}
         <div className="space-y-1">
           {rows.map((row:any)=>{
@@ -679,7 +655,7 @@ function ArrearsTab() {
                 <button
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 text-left"
                   onClick={()=>{ const n=new Set(expanded); isOpen?n.delete(sid):n.add(sid); setExpanded(n); }}>
-                  <span className="text-muted-foreground text-xs">›</span>
+                  <span className="text-muted-foreground text-xs">{isOpen?"▾":"›"}</span>
                   <div className="flex-1 min-w-0">
                     <span className="font-medium text-sm">{row.student?.first_name} {row.student?.last_name}</span>
                     <span className="text-xs text-muted-foreground ml-2">{row.student?.admission_number}</span>
@@ -688,61 +664,53 @@ function ArrearsTab() {
                   <div className="flex items-center gap-2 shrink-0">
                     {row.cumulative===0
                       ? <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">✓ Clear</span>
-                      : <><span className="text-xs text-muted-foreground">{row.monthsPresent} month{row.monthsPresent!==1?"s":""}</span>
-                         <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span></>}
+                      : <>
+                          <span className="text-xs text-muted-foreground">{row.sessionCount} session{row.sessionCount!==1?"s":""}</span>
+                          <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span>
+                        </>}
                     <button
-                      onClick={e=>{e.stopPropagation(); buildWhatsApp(row);}}
+                      onClick={e=>{e.stopPropagation(); sendWhatsApp(row);}}
                       className={"px-2 py-1 rounded text-xs font-medium "+(hasWA?"bg-[#25D366] text-white":"bg-muted text-muted-foreground")}>
                       WA
                     </button>
                   </div>
                 </button>
                 {isOpen && (
-                  <div className="px-4 pb-3 pt-0 border-t border-border/40 bg-muted/20">
-                    <div className="text-xs text-muted-foreground mb-2 mt-2">
-                      Monthly fee: {formatKES(row.monthlyFee)} · Paid: {formatKES(row.totalPaid)}
+                  <div className="px-4 pb-3 pt-1 border-t border-border/40 bg-muted/20">
+                    <div className="text-xs text-muted-foreground mb-2">
+                      {formatKES(row.sessionFee)} per session · {row.sessionCount} present · Paid: {formatKES(row.totalPaid)}
                     </div>
-                    <div className="space-y-1">
-                      {(row.invoices.length>0 ? row.invoices : row.periods).map((item:any,i:number)=>{
-                        const isInv = !!item.invoice_number;
-                        const label = isInv
-                          ? (item.period_month?`${MNS[item.period_month]} ${item.period_year}`:`Inv ${item.invoice_number}`)
-                          : item.label;
-                        const amount = isInv ? Number(item.amount_outstanding) : Number(item.amount);
-                        const paid = isInv && item.status==="paid";
-                        return (
+                    {row.sessions.length > 0 ? (
+                      <div className="space-y-1">
+                        {row.sessions.map((sess:any,i:number)=>(
                           <div key={i} className="flex justify-between text-xs py-1 border-b border-border/30 last:border-0">
-                            <span className="text-muted-foreground">
-                              {label}
-                              {!isInv&&<span className="ml-1 opacity-60">({item.sessions} session{item.sessions!==1?"s":""})</span>}
-                            </span>
-                            <span className={paid?"text-success":"text-danger font-medium"}>
-                              {paid?"Paid":`KES ${amount.toLocaleString("en-KE")}`}
-                            </span>
+                            <span className="text-muted-foreground">{sess.date} {sess.time && `· ${sess.time}`}</span>
+                            <span className="text-danger font-medium">{formatKES(row.sessionFee)}</span>
                           </div>
-                        );
-                      })}
-                      {row.periods.length===0&&row.invoices.length===0&&(
-                        <div className="text-xs text-muted-foreground py-2">No attendance records — not yet marked present in any session</div>
-                      )}
-                    </div>
-                    {row.totalPaid>0&&(
-                      <div className="flex justify-between text-xs mt-2 pt-2 border-t border-border font-semibold">
-                        <span className="text-success">Total Paid</span>
-                        <span className="text-success">{formatKES(row.totalPaid)}</span>
+                        ))}
+                        <div className="flex justify-between text-xs py-1 font-semibold border-t border-border mt-1 pt-1">
+                          <span>Total owed</span><span className="text-danger">{formatKES(row.totalOwed)}</span>
+                        </div>
+                        {row.totalPaid>0&&(
+                          <div className="flex justify-between text-xs py-0.5 font-semibold">
+                            <span className="text-success">Paid</span><span className="text-success">− {formatKES(row.totalPaid)}</span>
+                          </div>
+                        )}
+                        {row.cumulative>0&&(
+                          <div className="flex justify-between text-xs py-0.5 font-bold">
+                            <span className="text-danger">Balance due</span><span className="text-danger">{formatKES(row.cumulative)}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {row.invoices.length===0&&row.periods.length>0&&(
-                      <p className="text-xs text-muted-foreground/60 mt-2">From attendance records · Generate invoices to formalise</p>
+                    ) : (
+                      <div className="text-xs text-muted-foreground py-2">Not marked present in any session — no charge</div>
                     )}
                   </div>
                 )}
               </div>
             );
           })}
-          {!isLoading&&!rows.length&&(
-            <div className="py-8 text-center text-muted-foreground text-sm">No students found 🎉</div>
-          )}
+          {!isLoading&&!rows.length&&<div className="py-8 text-center text-muted-foreground text-sm">No students</div>}
         </div>
       </PageCard>
     </div>
