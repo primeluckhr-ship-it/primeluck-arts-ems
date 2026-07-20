@@ -1005,5 +1005,3 @@ function IncomeForm({ onClose, onSaved }:{ onClose:()=>void; onSaved:()=>void })
   );
 }
 
-// build: 1784478709
-// deployed: 2026-07-20T09:40:53Z
