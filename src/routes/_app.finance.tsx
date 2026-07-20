@@ -508,67 +508,114 @@ function ArrearsTab() {
     queryKey:["arrears-list", arrearsBranch],
     queryFn: async () => {
       if (!arrearsBranch) return [];
-      // Get ALL active students
+
+      // 1. Active students with parents
       const { data: branchStudents } = await supabase.from("students")
-        .select("id,first_name,last_name,admission_number,student_parents(parents(first_name,last_name,whatsapp,phone))")
+        .select("id,first_name,last_name,admission_number,enrollment_date,student_parents(parents(first_name,last_name,whatsapp,phone))")
         .eq("branch_id", arrearsBranch).eq("status","active");
       const studentIds = (branchStudents??[]).map((s:any)=>s.id);
       if (!studentIds.length) return [];
 
-      // Get accounts for ALL students — source of truth for balances
-      const { data: accounts } = await supabase.from("student_accounts")
-        .select("student_id,total_outstanding,total_fees,total_paid,account_status")
+      // 2. Monthly fee from course enrollments
+      const { data: enrollments } = await supabase.from("course_enrollments")
+        .select("student_id,fee_override,courses(monthly_fee)")
         .in("student_id", studentIds);
 
-      // Get ALL invoices for ALL students — every session, every period
+      // 3. All sessions with dates
+      const { data: allSessions } = await supabase.from("sessions")
+        .select("id,course_id,session_date").order("session_date",{ascending:true});
+
+      // 4. Attendance records to determine months attended
+      const { data: attendanceRecs } = await supabase.from("attendance_records")
+        .select("student_id,session_id,status").in("student_id", studentIds);
+
+      // 5. Payments made
+      const { data: accounts } = await supabase.from("student_accounts")
+        .select("student_id,total_paid,total_outstanding").in("student_id", studentIds);
+
+      // 6. Existing invoices for period breakdown
       const { data: invoices } = await supabase.from("invoices")
-        .select("id,student_id,invoice_number,period_month,period_year,billing_type,total_amount,amount_paid,amount_outstanding,status,due_date")
+        .select("id,student_id,invoice_number,period_month,period_year,total_amount,amount_paid,amount_outstanding,status,due_date")
         .in("student_id", studentIds)
         .order("period_year",{ascending:true}).order("period_month",{ascending:true});
 
-      const accountMap: Record<string, any> = {};
-      for (const a of (accounts??[])) accountMap[a.student_id] = a;
-      const studentMap: Record<string, any> = {};
+      const studentMap: Record<string,any> = {};
       for (const s of (branchStudents??[])) studentMap[s.id] = s;
 
-      // Group invoices by student
-      const invByStudent: Record<string, any[]> = {};
+      const feeMap: Record<string,number> = {};
+      for (const e of (enrollments??[])) {
+        const fee = Number(e.fee_override ?? (e.courses as any)?.monthly_fee ?? 0);
+        if (fee > (feeMap[e.student_id]??0)) feeMap[e.student_id] = fee;
+      }
+
+      const sessionMap: Record<string,any> = {};
+      for (const sess of (allSessions??[])) sessionMap[sess.id] = sess;
+
+      const attendedSessions: Record<string,Set<string>> = {};
+      for (const ar of (attendanceRecs??[])) {
+        if (!attendedSessions[ar.student_id]) attendedSessions[ar.student_id] = new Set();
+        attendedSessions[ar.student_id].add(ar.session_id);
+      }
+
+      const accountMap: Record<string,any> = {};
+      for (const a of (accounts??[])) accountMap[a.student_id] = a;
+
+      const invByStudent: Record<string,any[]> = {};
       for (const inv of (invoices??[])) {
         if (!invByStudent[inv.student_id]) invByStudent[inv.student_id] = [];
         invByStudent[inv.student_id].push(inv);
       }
 
-      const rows = studentIds
-        .map((sid:string) => {
-          const studentInvoices = invByStudent[sid] ?? [];
-          const unpaidInvoices = studentInvoices.filter((i:any) => i.status !== "paid");
-          // TRUE cumulative = sum of outstanding amounts across ALL sessions
-          const invoiceCumulative = unpaidInvoices.reduce((s:number, i:any) => s + Number(i.amount_outstanding||0), 0);
-          // Fall back to student_accounts if no invoices exist yet
-          const accountCumulative = Number(accountMap[sid]?.total_outstanding ?? 0);
-          const cumulative = invoiceCumulative > 0 ? invoiceCumulative : accountCumulative;
-          return {
-            student: studentMap[sid],
-            invoices: studentInvoices,
-            unpaidInvoices,
-            cumulative,
-            totalFees: Number(accountMap[sid]?.total_fees ?? 0),
-            totalPaid: Number(accountMap[sid]?.total_paid ?? 0),
-            account: accountMap[sid],
-          };
-        })
-        .filter((r:any) => r.student);
+      const MN = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-      // Sort: owing students first (highest balance), then clear alphabetically
-      return rows.sort((a:any, b:any) => {
-        if (a.cumulative > 0 && b.cumulative === 0) return -1;
-        if (a.cumulative === 0 && b.cumulative > 0) return 1;
-        if (a.cumulative > 0 && b.cumulative > 0) return b.cumulative - a.cumulative;
+      const rows = studentIds.map((sid:string) => {
+        const student = studentMap[sid];
+        const monthlyFee = feeMap[sid] ?? 0;
+        const totalPaid = Number(accountMap[sid]?.total_paid ?? 0);
+        const studentSessions = attendedSessions[sid] ?? new Set<string>();
+
+        // Build month attendance map from session dates
+        const monthMap = new Map<string,{month:number;year:number;sessions:number}>();
+        for (const sessId of studentSessions) {
+          const sess = sessionMap[sessId];
+          if (!sess?.session_date) continue;
+          const d = new Date(sess.session_date);
+          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+          if (!monthMap.has(key)) monthMap.set(key,{month:d.getMonth()+1,year:d.getFullYear(),sessions:0});
+          monthMap.get(key)!.sessions++;
+        }
+
+        const periods = Array.from(monthMap.values())
+          .sort((a,b)=>a.year!==b.year?a.year-b.year:a.month-b.month)
+          .map(p=>({label:`${MN[p.month]} ${p.year}`,month:p.month,year:p.year,sessions:p.sessions,amount:monthlyFee}));
+
+        // True balance from attendance: months × fee − paid
+        const attendanceCumulative = Math.max(0, periods.length * monthlyFee - totalPaid);
+
+        // Use invoices if generated, else attendance-based
+        const existingInvoices = invByStudent[sid] ?? [];
+        const invoiceCumulative = existingInvoices
+          .filter((i:any)=>i.status!=="paid")
+          .reduce((s:number,i:any)=>s+Number(i.amount_outstanding||0),0);
+
+        const cumulative = existingInvoices.length > 0 ? invoiceCumulative : attendanceCumulative;
+
+        return {
+          student, invoices: existingInvoices, periods,
+          cumulative, monthlyFee, totalPaid,
+          monthsAttended: periods.length,
+          totalOwed: periods.length * monthlyFee,
+        };
+      }).filter((r:any)=>r.student);
+
+      return rows.sort((a:any,b:any)=>{
+        if (a.cumulative>0&&b.cumulative===0) return -1;
+        if (a.cumulative===0&&b.cumulative>0) return 1;
+        if (a.cumulative>0&&b.cumulative>0) return b.cumulative-a.cumulative;
         return `${a.student?.first_name} ${a.student?.last_name}`.localeCompare(`${b.student?.first_name} ${b.student?.last_name}`);
       });
     },
   });
-
   const MONTHS = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   function buildWhatsApp(row:any, template:any) {
@@ -646,7 +693,7 @@ function ArrearsTab() {
                   <div className="flex items-center gap-2 shrink-0">
                     {row.cumulative === 0
                       ? <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">✓ Clear</span>
-                      : <><span className="text-xs text-muted-foreground">{row.invoices.length} period{row.invoices.length!==1?"s":""}</span>
+                      : <><span className="text-xs text-muted-foreground">{row.monthsAttended||row.invoices.length} month{(row.monthsAttended||row.invoices.length)!==1?"s":""}</span>
                          <span className="font-bold text-danger text-sm">{formatKES(row.cumulative)}</span></>}
                     <button onClick={(e) => { e.stopPropagation(); buildWhatsApp(row, template); }} disabled={!hasWA}
                       title={hasWA?"Send WhatsApp reminder":"No WhatsApp number registered"}
