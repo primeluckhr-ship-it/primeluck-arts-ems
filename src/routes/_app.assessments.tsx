@@ -135,7 +135,7 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6">
         <h2 className="text-lg font-semibold mb-4">New Assessment</h2>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Field label="Student" className="sm:col-span-2">
+          <Field label="Student *" className="sm:col-span-2">
             <select value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
               <option value="">—</option>{(students ?? []).map((s: any) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
             </select>
@@ -146,14 +146,15 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
             </select>
           </Field>
           <Field label="Date"><Input type="date" value={form.assessment_date} onChange={(v) => setForm({ ...form, assessment_date: v })} /></Field>
-          <Field label="Title" className="sm:col-span-2"><Input value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></Field>
+          <Field label="Title *" className="sm:col-span-2"><Input value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></Field>
           <Field label="Score"><Input type="number" value={form.score} onChange={(v) => setForm({ ...form, score: v })} /></Field>
           <Field label="Max score"><Input type="number" value={form.max_score} onChange={(v) => setForm({ ...form, max_score: v })} /></Field>
           <Field label="Notes / Feedback" className="sm:col-span-2">
             <textarea value={form.notes} rows={3} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
           </Field>
         </div>
-        <div className="flex justify-end gap-2 mt-5">
+        <p className="text-xs text-muted-foreground mt-4">* Required</p>
+        <div className="flex justify-end gap-2 mt-2">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
           <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">Save</button>
         </div>
