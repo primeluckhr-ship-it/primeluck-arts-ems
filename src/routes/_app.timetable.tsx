@@ -36,7 +36,7 @@ function AddSessionModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const { data: courses } = useQuery({
     queryKey: ["courses-for-session", branch],
     queryFn: async () =>
-      (await supabase.from("courses").select("id,name").eq("branch_id", branch).eq("status", "active").order("name")).data ?? [],
+      (await supabase.from("courses").select("id,name").eq("branch_id", branch).eq("status", "active").order("name").throwOnError()).data ?? [],
   });
 
   async function save() {

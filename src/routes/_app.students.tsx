@@ -322,13 +322,13 @@ function StudentForm({ initial, targetBranch, onClose, onSaved }: {
   const { data: institutions } = useQuery({
     queryKey: ["institutions-list", branchForLookup],
     queryFn: async () => (await supabase.from("institutions").select("id,name")
-      .eq("is_active", true).eq("branch_id", branchForLookup).order("name")).data ?? [],
+      .eq("is_active", true).eq("branch_id", branchForLookup).order("name").throwOnError()).data ?? [],
   });
 
   const { data: courses } = useQuery({
     queryKey: ["courses-active", branchForLookup],
     queryFn: async () => (await supabase.from("courses").select("id,name,monthly_fee,term_fee,session_fee,billing_cycle")
-      .eq("status", "active").eq("branch_id", branchForLookup).order("name")).data ?? [],
+      .eq("status", "active").eq("branch_id", branchForLookup).order("name").throwOnError()).data ?? [],
   });
   const selectedCourse = (courses ?? []).find((c: any) => c.id === selectedCourseId);
   const standardFee = selectedCourse

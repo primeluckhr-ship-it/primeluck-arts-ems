@@ -62,7 +62,7 @@ function AssessmentsPage() {
         // admin/instructor: filter by branch
         if (branch) q = q.eq("branch_id", branch);
       }
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 
@@ -105,12 +105,12 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const { data: students } = useQuery({ queryKey: ["assess-students", formBranch], queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name").eq("status","active");
       if (formBranch) q = q.eq("branch_id", formBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     } });
   const { data: courses } = useQuery({ queryKey: ["assess-courses", formBranch], queryFn: async () => {
       let q = supabase.from("courses").select("id,name").eq("status","active");
       if (formBranch) q = q.eq("branch_id", formBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     } });
   const [form, setForm] = useState({
     student_id: "", course_id: "", title: "", assessment_date: new Date().toISOString().slice(0, 10),

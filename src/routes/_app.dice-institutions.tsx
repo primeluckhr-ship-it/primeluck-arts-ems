@@ -229,7 +229,7 @@ function PartnerSchoolsPage() {
 function InstForm({ initial, branch, onClose, onSaved }: { initial: any; branch: string; onClose: () => void; onSaved: () => void }) {
   const { data: courses } = useQuery({
     queryKey: ["courses-active", branch],
-    queryFn: async () => (await supabase.from("courses").select("id,name").eq("status","active").eq("branch_id", branch).order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("courses").select("id,name").eq("status","active").eq("branch_id", branch).order("name").throwOnError()).data ?? [],
   });
 
   const [form, setForm] = useState({

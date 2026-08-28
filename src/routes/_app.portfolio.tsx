@@ -28,7 +28,7 @@ function PortfolioPage() {
     queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name,student_type").eq("status","active").order("first_name");
       if (portfolioBranch) q = q.eq("branch_id", portfolioBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
     enabled: isAdmin || isInstructor,
   });
@@ -63,7 +63,7 @@ function PortfolioPage() {
         if (!isAdmin) q = q.eq("branch_id", user?.branch_id ?? "");
         if (studentFilter !== "all") q = q.eq("student_id", studentFilter);
       }
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
     enabled: user?.role !== "parent" || !!childIds,
   });

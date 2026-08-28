@@ -49,7 +49,7 @@ function LessonPlansTab() {
 
   const { data: coursesForFilter } = useQuery({
     queryKey: ["courses-filter", branch],
-    queryFn: async () => (await supabase.from("courses").select("id,name").eq("branch_id", branch ?? "").eq("status","active").order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("courses").select("id,name").eq("branch_id", branch ?? "").eq("status","active").order("name").throwOnError()).data ?? [],
   });
 
   const { data, isLoading } = useQuery({
@@ -60,7 +60,7 @@ function LessonPlansTab() {
         .eq("branch_id", branch ?? "")
         .order("lesson_date", { ascending: false });
       if (courseFilter !== "all") q = q.eq("course_id", courseFilter);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 
@@ -332,11 +332,11 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
   const formBranch = (user?.role === "super_admin" ? activeBranch : user?.branch_id) ?? "";
   const { data: courses } = useQuery({
     queryKey: ["courses-list", formBranch],
-    queryFn: async () => (await supabase.from("courses").select("id,name").eq("status","active").eq("branch_id", formBranch).order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("courses").select("id,name").eq("status","active").eq("branch_id", formBranch).order("name").throwOnError()).data ?? [],
   });
   const { data: instructors } = useQuery({
     queryKey: ["instructors-active", formBranch],
-    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", formBranch).order("first_name")).data ?? [],
+    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", formBranch).order("first_name").throwOnError()).data ?? [],
   });
 
   async function save() {
@@ -554,7 +554,7 @@ function ProgressReportsTab() {
     queryFn: async () => (await supabase.from("student_progress_reports")
       .select("*,students(first_name,last_name,admission_number),courses(name),instructors(first_name,last_name)")
       .eq("branch_id", user?.branch_id ?? "")
-      .order("report_date", { ascending: false })).data ?? [],
+      .order("report_date", { ascending: false }).throwOnError()).data ?? [],
   });
 
   const GRADE_COLORS: Record<string, string> = {
@@ -751,10 +751,10 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
   const { data: students } = useQuery({ queryKey:["students-active", formBranch], queryFn: async () => {
     let q = supabase.from("students").select("id,first_name,last_name,admission_number").eq("status","active").order("first_name");
     if (formBranch) q = q.eq("branch_id", formBranch);
-    return (await q).data ?? [];
+    return (await q.throwOnError()).data ?? [];
   }});
-  const { data: courses }   = useQuery({ queryKey:["courses-list"],   queryFn: async () => (await supabase.from("courses").select("id,name").order("name")).data ?? [] });
-  const { data: instructors } = useQuery({ queryKey:["instructors-active"], queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").order("first_name")).data ?? [] });
+  const { data: courses }   = useQuery({ queryKey:["courses-list"],   queryFn: async () => (await supabase.from("courses").select("id,name").order("name").throwOnError()).data ?? [] });
+  const { data: instructors } = useQuery({ queryKey:["instructors-active"], queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").order("first_name").throwOnError()).data ?? [] });
 
   // Auto-fill attendance from DB when student+course selected
   async function autoFill() {

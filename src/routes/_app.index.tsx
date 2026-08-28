@@ -278,7 +278,7 @@ function ParentDash() {
         .eq("parent_id", user.linked_entity_id);
       const studentIds = (sp ?? []).map((s: any) => s.student_id);
       const accounts = studentIds.length
-        ? (await supabase.from("student_accounts").select("student_id,total_outstanding").in("student_id", studentIds)).data ?? []
+        ? (await supabase.from("student_accounts").select("student_id,total_outstanding").in("student_id", studentIds).throwOnError()).data ?? []
         : [];
       return (sp ?? []).map((row: any) => ({
         ...row.students,
@@ -321,7 +321,7 @@ function StudentDash() {
       const { data: enr } = await supabase.from("course_enrollments").select("course_id").eq("student_id", user.linked_entity_id);
       const cids = (enr ?? []).map((e: any) => e.course_id);
       const sessions = cids.length
-        ? (await supabase.from("sessions").select("id,session_date,topic,courses(name,start_time,end_time,room)").in("course_id", cids).eq("session_date", today)).data ?? []
+        ? (await supabase.from("sessions").select("id,session_date,topic,courses(name,start_time,end_time,room)").in("course_id", cids).eq("session_date", today).throwOnError()).data ?? []
         : [];
       const acct = (await supabase.from("student_accounts").select("total_outstanding").eq("student_id", user.linked_entity_id).maybeSingle()).data;
       return { sessions, outstanding: acct?.total_outstanding ?? 0 };
@@ -399,7 +399,7 @@ function DiceAdminDash() {
       .select("*,students(first_name,last_name),courses(name)")
       .eq("branch_id", BRANCH)
       .order("report_date", { ascending: false })
-      .limit(4)).data ?? [],
+      .limit(4).throwOnError()).data ?? [],
   });
 
   const { data: recentProjects } = useQuery({
@@ -409,7 +409,7 @@ function DiceAdminDash() {
       .eq("branch_id", BRANCH)
       .in("status", ["active","planning"])
       .order("start_date")
-      .limit(4)).data ?? [],
+      .limit(4).throwOnError()).data ?? [],
   });
 
   const GRADE_DOT: Record<string, string> = {
