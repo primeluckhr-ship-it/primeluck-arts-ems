@@ -114,7 +114,7 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     } });
   const [form, setForm] = useState({
     student_id: "", course_id: "", title: "", assessment_date: new Date().toISOString().slice(0, 10),
-    score: 0, max_score: 100, notes: "",
+    score: "0", max_score: "100", notes: "",
   });
   const [saving, setSaving] = useState(false);
   async function save() {
@@ -147,8 +147,8 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           </Field>
           <Field label="Date"><Input type="date" value={form.assessment_date} onChange={(v) => setForm({ ...form, assessment_date: v })} /></Field>
           <Field label="Title" className="sm:col-span-2"><Input value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></Field>
-          <Field label="Score"><Input type="number" value={String(form.score)} onChange={(v) => setForm({ ...form, score: Number(v) })} /></Field>
-          <Field label="Max score"><Input type="number" value={String(form.max_score)} onChange={(v) => setForm({ ...form, max_score: Number(v) })} /></Field>
+          <Field label="Score"><Input type="number" value={form.score} onChange={(v) => setForm({ ...form, score: v })} /></Field>
+          <Field label="Max score"><Input type="number" value={form.max_score} onChange={(v) => setForm({ ...form, max_score: v })} /></Field>
           <Field label="Notes / Feedback" className="sm:col-span-2">
             <textarea value={form.notes} rows={3} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm" />
           </Field>
