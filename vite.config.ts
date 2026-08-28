@@ -12,4 +12,16 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  nitro: {
+    preset: "cloudflare-module",
+    // Pin output paths explicitly — the config package only forces these when it detects
+    // the Lovable sandbox env vars, so a plain `npm run build` on Vercel was falling back
+    // to nitro's own default output location instead of dist/client, breaking
+    // scripts/generate-index.js which expects dist/client/assets to exist.
+    output: {
+      dir: "dist",
+      serverDir: "dist/server",
+      publicDir: "dist/client",
+    },
+  },
 });
