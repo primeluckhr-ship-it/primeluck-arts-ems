@@ -206,16 +206,17 @@ function WhatsAppSharePlan({ plan }: { plan: any }) {
 }
 
 // TA is outside LessonPlanForm so React doesn't remount it on every render (fixes frozen textareas)
-function TA({ label, field, form, setForm }: {
+function TA({ label, field, form, setForm, rows = 3 }: {
   label: string; field: string;
   form: Record<string, any>; setForm: (f: any) => void;
+  rows?: number;
 }) {
   return (
     <Field label={label} className="sm:col-span-2">
       <textarea
         value={form[field] ?? ""}
         onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-        rows={3}
+        rows={rows}
         className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
         placeholder={`Enter ${label.toLowerCase()}…`}
       />
@@ -771,7 +772,7 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     if (!form.student_id) { toast.error("Select a student"); return; }
     setSaving(true);
     try {
-      const payload = { ...form, branch_id: user?.branch_id ?? "", created_by: user?.id,
+      const payload = { ...form, branch_id: formBranch, created_by: user?.id,
         attendance_sessions: Number(form.attendance_sessions), attendance_present: Number(form.attendance_present),
         course_id: form.course_id || null, instructor_id: form.instructor_id || null };
       let reportId = initial?.id;
@@ -801,12 +802,6 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     } catch (e: any) { toast.error("Save failed: " + e.message); console.error("Lesson plan save error:", e); } finally { setSaving(false); }
   }
 
-  const TA = ({ label, field, rows = 3 }: { label: string; field: keyof typeof form; rows?: number }) => (
-    <Field label={label} className="sm:col-span-2">
-      <textarea value={form[field] as string} onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-        rows={rows} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"/>
-    </Field>
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
@@ -848,9 +843,9 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
               </div>
             </div>
           </div>
-          <TA label="Skills Demonstrated" field="skills_demonstrated"/>
-          <TA label="Areas for Improvement" field="areas_for_improvement"/>
-          <TA label="Instructor's Comments" field="instructor_comments" rows={4}/>
+          <TA label="Skills Demonstrated" field="skills_demonstrated" form={form} setForm={setForm}/>
+          <TA label="Areas for Improvement" field="areas_for_improvement" form={form} setForm={setForm}/>
+          <TA label="Instructor's Comments" field="instructor_comments" form={form} setForm={setForm} rows={4}/>
         </div>
         {/* Photo upload */}
         <div className="sm:col-span-2">
