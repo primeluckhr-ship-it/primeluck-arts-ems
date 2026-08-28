@@ -137,7 +137,7 @@ function AnnouncementsPage() {
       let q = supabase.from("announcements").select("*").eq("is_published", true).order("created_at", { ascending: false });
       if (user?.role !== "super_admin") q = q.eq("branch_id", user?.branch_id ?? "");
       else q = q.eq("branch_id", branch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 

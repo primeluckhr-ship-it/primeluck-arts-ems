@@ -22,7 +22,7 @@ function AcademyGallery() {
         .select("*,students(first_name,last_name,skill_level)")
         .eq("branch_id", branch).eq("is_shared", true)
         .order("is_featured", { ascending: false })
-        .order("created_at", { ascending: false })).data ?? [],
+        .order("created_at", { ascending: false }).throwOnError()).data ?? [],
   });
 
   const artists = Array.from(new Map(artworks.map((a: any) => [a.student_id, a.students])).entries());

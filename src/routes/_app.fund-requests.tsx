@@ -49,7 +49,7 @@ function FundRequestsPage() {
       } else if (user?.role === "dice_admin") {
         q = q.eq("branch_id", user.branch_id);
       }
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 

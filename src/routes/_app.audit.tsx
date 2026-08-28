@@ -16,7 +16,7 @@ function AuditPage() {
 
   const { data } = useQuery({
     queryKey: ["audit-log"],
-    queryFn: async () => (await supabase.from("audit_logs").select("id,action,entity_type,entity_id,description,branch_id,created_at,user_id,users(first_name,last_name,email)").order("created_at", { ascending: false }).limit(500)).data ?? [],
+    queryFn: async () => (await supabase.from("audit_logs").select("id,action,entity_type,entity_id,description,branch_id,created_at,user_id,users(first_name,last_name,email)").order("created_at", { ascending: false }).limit(500).throwOnError()).data ?? [],
   });
 
   const filtered = useMemo(() => {

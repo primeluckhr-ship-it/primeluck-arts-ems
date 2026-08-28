@@ -32,7 +32,7 @@ function FeedbackAdminPage() {
     queryFn: async () => {
       let q = supabase.from("feedback").select("*").order("created_at", { ascending: false });
       if (revBranch) q = q.eq("branch_id", revBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 

@@ -241,7 +241,7 @@ function ExpenditureReportTab() {
         .order("expense_date");
       const expBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       if (expBranch) q = q.eq("branch_id", expBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 
@@ -317,7 +317,7 @@ function CategoriesTab() {
     queryFn: async () => {
       let q = supabase.from("courses").select("id,name,category,billing_cycle,monthly_fee,term_fee,status");
       if (catBranch) q = q.eq("branch_id", catBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
   const { data: enrollments } = useQuery({

@@ -152,15 +152,15 @@ function ProjectDetail({ project, onBack, onDelete }: { project: any; onBack: ()
 
   const { data: milestones } = useQuery({
     queryKey: ["milestones", project.id],
-    queryFn: async () => (await supabase.from("project_milestones").select("*").eq("project_id", project.id).order("due_date")).data ?? [],
+    queryFn: async () => (await supabase.from("project_milestones").select("*").eq("project_id", project.id).order("due_date").throwOnError()).data ?? [],
   });
   const { data: budgetItems } = useQuery({
     queryKey: ["budget-items", project.id],
-    queryFn: async () => (await supabase.from("project_budget_items").select("*").eq("project_id", project.id).order("created_at")).data ?? [],
+    queryFn: async () => (await supabase.from("project_budget_items").select("*").eq("project_id", project.id).order("created_at").throwOnError()).data ?? [],
   });
   const { data: stages } = useQuery({
     queryKey: ["project-stages", project.id],
-    queryFn: async () => (await supabase.from("project_stages").select("*").eq("project_id", project.id).order("stage_order")).data ?? [],
+    queryFn: async () => (await supabase.from("project_stages").select("*").eq("project_id", project.id).order("stage_order").throwOnError()).data ?? [],
   });
 
   async function saveMilestone() {
@@ -393,16 +393,16 @@ function ProjectForm({ initial, branch, onClose, onSaved }: { initial: any; bran
   const otherBranch = branch === "dice-arts-nairobi" ? "branch-1" : "dice-arts-nairobi";
   const { data: instructors } = useQuery({
     queryKey: ["instructors-list-proj", branch],
-    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", branch).order("first_name")).data ?? [],
+    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", branch).order("first_name").throwOnError()).data ?? [],
   });
   const { data: coLeadInstructors } = useQuery({
     queryKey: ["instructors-co-lead", otherBranch],
-    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", otherBranch).order("first_name")).data ?? [],
+    queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").eq("status","active").eq("branch_id", otherBranch).order("first_name").throwOnError()).data ?? [],
   });
   const { data: diceInstitutions } = useQuery({
     queryKey: ["dice-institutions", branch],
     enabled: isDice,
-    queryFn: async () => (await supabase.from("dice_institutions").select("id,name").eq("is_active",true).eq("branch_id", branch).order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("dice_institutions").select("id,name").eq("is_active",true).eq("branch_id", branch).order("name").throwOnError()).data ?? [],
   });
 
   async function save() {

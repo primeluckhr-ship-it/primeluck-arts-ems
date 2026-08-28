@@ -69,7 +69,7 @@ function CoursesPage() {
         .order("name");
       const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       if (branch) q = q.eq("branch_id", branch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 
@@ -241,7 +241,7 @@ function CourseForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
       let q = supabase.from("instructors").select("id,first_name,last_name").eq("status","active").order("first_name");
       const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
       if (branch) q = q.eq("branch_id", branch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 

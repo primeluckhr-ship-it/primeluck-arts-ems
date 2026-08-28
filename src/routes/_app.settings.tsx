@@ -55,7 +55,7 @@ function UsersTab() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey:["users-list"],
-    queryFn: async () => (await supabase.from("users").select("*").order("role")).data ?? [],
+    queryFn: async () => (await supabase.from("users").select("*").order("role").throwOnError()).data ?? [],
   });
   async function handleDeleteUser(u: any) {
     if (!confirm(`Delete user ${u.email}? This cannot be undone.`)) return;
@@ -351,7 +351,7 @@ function BranchesTab() {
 
   const { data: branches } = useQuery({
     queryKey: ["branches-all"],
-    queryFn: async () => (await supabase.from("branches").select("*").order("created_at")).data ?? [],
+    queryFn: async () => (await supabase.from("branches").select("*").order("created_at").throwOnError()).data ?? [],
   });
 
   function slugify(name: string) {

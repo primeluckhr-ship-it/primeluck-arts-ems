@@ -23,7 +23,7 @@ function ProgramsPage() {
     queryFn: async () => {
       let q = supabase.from("programs").select("*").order("name");
       if (progBranch) q = q.eq("branch_id", progBranch);
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 

@@ -33,7 +33,7 @@ function ProfitSummary({ branch }: { branch: string }) {
       let q = supabase.from("payments").select("amount,payment_date").gte("payment_date", fromDate);
       if (branch) q = q.eq("branch_id", branch);
       // already filtered
-      return (await q).data ?? [];
+      return (await q.throwOnError()).data ?? [];
     },
   });
 
@@ -41,21 +41,21 @@ function ProfitSummary({ branch }: { branch: string }) {
   const { data: income } = useQuery({
     queryKey: ["profit-income", branch, fromDate],
     queryFn: async () =>
-      (await supabase.from("income_records").select("amount").eq("branch_id", branch).gte("income_date", fromDate)).data ?? [],
+      (await supabase.from("income_records").select("amount").eq("branch_id", branch).gte("income_date", fromDate).throwOnError()).data ?? [],
   });
 
   // Expenditures
   const { data: expenditures } = useQuery({
     queryKey: ["profit-expenditures", branch, fromDate],
     queryFn: async () =>
-      (await supabase.from("expenditures").select("amount").eq("branch_id", branch).gte("expense_date", fromDate)).data ?? [],
+      (await supabase.from("expenditures").select("amount").eq("branch_id", branch).gte("expense_date", fromDate).throwOnError()).data ?? [],
   });
 
   // Approved fund requests
   const { data: fundRequests } = useQuery({
     queryKey: ["profit-fund", branch, fromDate],
     queryFn: async () =>
-      (await supabase.from("fund_requests").select("amount").eq("branch_id", branch).eq("status","approved").gte("created_at", fromDate)).data ?? [],
+      (await supabase.from("fund_requests").select("amount").eq("branch_id", branch).eq("status","approved").gte("created_at", fromDate).throwOnError()).data ?? [],
   });
 
   const totalPayments   = (payments??[]).reduce((s:number,p:any)=>s+Number(p.amount),0);
@@ -172,7 +172,7 @@ function InvoicesTab() {
         .in("student_id", studentIds)
         .eq("period_month", month).eq("period_year", year);
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
-      return (await q.order("invoice_number", {ascending:false})).data ?? [];
+      return (await q.order("invoice_number", {ascending:false}).throwOnError()).data ?? [];
     },
   });
 

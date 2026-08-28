@@ -25,7 +25,7 @@ function StudentPortfolio() {
         .eq("student_id", id)
         .eq("is_shared", true)
         .order("is_featured", { ascending: false })
-        .order("created_at", { ascending: false })).data ?? [],
+        .order("created_at", { ascending: false }).throwOnError()).data ?? [],
   });
 
   const featured = (artworks ?? []).filter((a: any) => a.is_featured);

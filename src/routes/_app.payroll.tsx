@@ -33,7 +33,7 @@ function PayrollPage() {
       .select("*,instructors(first_name,last_name,email)")
       .eq("month", selMonth).eq("year", selYear)
       .eq("branch_id", branch)
-      .order("created_at")).data ?? [],
+      .order("created_at").throwOnError()).data ?? [],
   });
 
   const totalNet = (data??[]).reduce((s:number,r:any) => s+Number(r.net_amount),0);
