@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus } from "lucide-react";
+import { Plus, Eye, MessageCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Field, Input } from "./_app.students";
@@ -32,11 +32,29 @@ function gradeColor(g: string) {
   }[g] ?? "bg-muted text-muted-foreground border-border";
 }
 
+function buildWhatsappMessage(a: any): string {
+  const isDice = a.branch_id === "dice-arts-nairobi";
+  const schoolName = isDice ? "Dice Arts Academy" : "PrimeLuck Arts Academy";
+  const grade = a.grade || gradeFor(Number(a.score), Number(a.max_score) || 100);
+  const dateStr = a.assessment_date ? format(new Date(a.assessment_date), "dd MMM yyyy") : "—";
+  const notesLine = a.notes ? `\n💬 *Notes*\n${a.notes}\n` : "";
+  return `*${schoolName} — Assessment Result*\n\n👤 *Student:* ${a.students?.first_name} ${a.students?.last_name}\n📚 *Course:* ${a.courses?.name ?? "—"}\n📝 *Assessment:* ${a.title}\n📅 *Date:* ${dateStr}\n\n📊 *Score:* ${a.score}/${a.max_score}\n🏅 *Grade:* ${grade}\n${notesLine}\n_${schoolName}_`;
+}
+
+function openWhatsApp(waNumber: string, a: any) {
+  const digits = (waNumber ?? "").replace(/\D/g, "");
+  if (!digits) { toast.error("Invalid WhatsApp number saved for this contact."); return; }
+  const msg = buildWhatsappMessage(a);
+  window.open(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`, "_blank");
+}
+
 function AssessmentsPage() {
   const { user, activeBranch } = useAuth();
   const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [viewing, setViewing] = useState<any>(null);
+  const [waPicker, setWaPicker] = useState<{ assessment: any; parents: any[] } | null>(null);
 
   const scopedIds = useQuery({
     queryKey: ["assess-scope", user?.id],
@@ -68,6 +86,38 @@ function AssessmentsPage() {
 
   const canCreate = ["super_admin","teacher","instructor","dice_admin"].includes(user?.role ?? "");
 
+  async function shareToWhatsApp(a: any) {
+    try {
+      const { data: links, error } = await supabase
+        .from("student_parents")
+        .select("is_primary,parents(first_name,whatsapp,relationship)")
+        .eq("student_id", a.student_id);
+      if (error) throw error;
+      const contacts = (links ?? [])
+        .map((l: any) => l.parents)
+        .filter((p: any) => p?.whatsapp);
+      if (!contacts.length) { toast.error("No WhatsApp contact saved for this student's parent."); return; }
+      if (contacts.length === 1) {
+        openWhatsApp(contacts[0].whatsapp, a);
+      } else {
+        setWaPicker({ assessment: a, parents: contacts });
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
+  async function deleteAssessment(a: any) {
+    if (!window.confirm("Delete this assessment? This cannot be undone.")) return;
+    try {
+      await supabase.from("assessments").delete().eq("id", a.id).throwOnError();
+      toast.success("Deleted");
+      qc.invalidateQueries({ queryKey: ["assessments-list"] });
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
   return (
     <PageCard
       title="Assessments"
@@ -75,7 +125,7 @@ function AssessmentsPage() {
       action={canCreate && <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4" /> New Assessment</button>}
     >
       <table className="w-full text-sm">
-        <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Date</th><th>Student</th><th>Course</th><th>Title</th><th>Score</th><th>Grade</th></tr></thead>
+        <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Date</th><th>Student</th><th>Course</th><th>Title</th><th>Score</th><th>Grade</th><th>Actions</th></tr></thead>
         <tbody>
           {(data ?? []).map((a: any) => {
             const grade = a.grade || gradeFor(Number(a.score), Number(a.max_score) || 100);
@@ -87,15 +137,81 @@ function AssessmentsPage() {
                 <td className="py-2.5 font-medium">{a.title}</td>
                 <td className="py-2.5">{a.score}/{a.max_score}</td>
                 <td className="py-2.5"><Badge className={gradeColor(grade)}>{grade}</Badge></td>
+                <td className="py-2.5">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setViewing(a)} title="View" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><Eye className="size-4" /></button>
+                    <button onClick={() => shareToWhatsApp(a)} title="Share via WhatsApp" className="p-1.5 rounded-md hover:bg-muted text-success"><MessageCircle className="size-4" /></button>
+                    {canCreate && <button onClick={() => deleteAssessment(a)} title="Delete" className="p-1.5 rounded-md hover:bg-muted text-danger"><Trash2 className="size-4" /></button>}
+                  </div>
+                </td>
               </tr>
             );
           })}
-          {!data?.length && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">No assessments.</td></tr>}
+          {!data?.length && <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">No assessments.</td></tr>}
         </tbody>
       </table>
 
       {open && <AssessForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["assessments-list"] }); }} />}
+      {viewing && <AssessmentViewModal a={viewing} onClose={() => setViewing(null)} />}
+      {waPicker && (
+        <WhatsAppPickerModal
+          parents={waPicker.parents}
+          onPick={(p) => { openWhatsApp(p.whatsapp, waPicker.assessment); setWaPicker(null); }}
+          onClose={() => setWaPicker(null)}
+        />
+      )}
     </PageCard>
+  );
+}
+
+function AssessmentViewModal({ a, onClose }: { a: any; onClose: () => void }) {
+  const grade = a.grade || gradeFor(Number(a.score), Number(a.max_score) || 100);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Assessment Details</h2>
+          <Badge className={gradeColor(grade)}>{grade}</Badge>
+        </div>
+        <div className="space-y-3 text-sm">
+          <div><span className="text-muted-foreground">Student:</span> {a.students?.first_name} {a.students?.last_name}{a.students?.admission_number ? ` (${a.students.admission_number})` : ""}</div>
+          <div><span className="text-muted-foreground">Course:</span> {a.courses?.name ?? "—"}</div>
+          <div><span className="text-muted-foreground">Title:</span> {a.title}</div>
+          <div><span className="text-muted-foreground">Date:</span> {a.assessment_date ? format(new Date(a.assessment_date), "dd MMM yyyy") : "—"}</div>
+          <div><span className="text-muted-foreground">Score:</span> {a.score}/{a.max_score}</div>
+          {a.notes && (
+            <div>
+              <span className="text-muted-foreground block mb-1">Notes / Feedback:</span>
+              <p className="whitespace-pre-wrap">{a.notes}</p>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end mt-5">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WhatsAppPickerModal({ parents, onPick, onClose }: { parents: any[]; onPick: (p: any) => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6">
+        <h2 className="text-lg font-semibold mb-4">Send to which parent?</h2>
+        <div className="space-y-2">
+          {parents.map((p: any, i: number) => (
+            <button key={i} onClick={() => onPick(p)} className="w-full text-left px-3 py-2 rounded-md border border-border hover:bg-muted text-sm">
+              <div className="font-medium">{p.first_name}</div>
+              <div className="text-xs text-muted-foreground capitalize">{p.relationship ?? "Parent"}</div>
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end mt-4">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
