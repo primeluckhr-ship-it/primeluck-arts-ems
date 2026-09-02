@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus, Eye, MessageCircle, Trash2 } from "lucide-react";
+import { Plus, Eye, Pencil, MessageCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Field, Input } from "./_app.students";
@@ -53,6 +53,7 @@ function AssessmentsPage() {
   const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
   const [viewing, setViewing] = useState<any>(null);
   const [waPicker, setWaPicker] = useState<{ assessment: any; parents: any[] } | null>(null);
 
@@ -84,21 +85,21 @@ function AssessmentsPage() {
     },
   });
 
-  const canCreate = ["super_admin","teacher","instructor","dice_admin"].includes(user?.role ?? "");
+  const canManage = ["super_admin","teacher","instructor","dice_admin"].includes(user?.role ?? "");
 
   async function shareToWhatsApp(a: any) {
     try {
       const { data: links, error } = await supabase
         .from("student_parents")
-        .select("is_primary,parents(first_name,whatsapp,relationship)")
+        .select("is_primary,parents(first_name,whatsapp,phone,relationship)")
         .eq("student_id", a.student_id);
       if (error) throw error;
       const contacts = (links ?? [])
         .map((l: any) => l.parents)
-        .filter((p: any) => p?.whatsapp);
-      if (!contacts.length) { toast.error("No WhatsApp contact saved for this student's parent."); return; }
+        .filter((p: any) => p?.whatsapp || p?.phone);
+      if (!contacts.length) { toast.error("No phone or WhatsApp contact saved for this student's parent."); return; }
       if (contacts.length === 1) {
-        openWhatsApp(contacts[0].whatsapp, a);
+        openWhatsApp(contacts[0].whatsapp || contacts[0].phone, a);
       } else {
         setWaPicker({ assessment: a, parents: contacts });
       }
@@ -122,7 +123,7 @@ function AssessmentsPage() {
     <PageCard
       title="Assessments"
       subtitle={`${data?.length ?? 0} records`}
-      action={canCreate && <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4" /> New Assessment</button>}
+      action={canManage && <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-accent text-accent-foreground px-3 py-2 text-sm font-medium"><Plus className="size-4" /> New Assessment</button>}
     >
       <table className="w-full text-sm">
         <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-2">Date</th><th>Student</th><th>Course</th><th>Title</th><th>Score</th><th>Grade</th><th>Actions</th></tr></thead>
@@ -141,7 +142,8 @@ function AssessmentsPage() {
                   <div className="flex items-center gap-2">
                     <button onClick={() => setViewing(a)} title="View" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><Eye className="size-4" /></button>
                     <button onClick={() => shareToWhatsApp(a)} title="Share via WhatsApp" className="p-1.5 rounded-md hover:bg-muted text-success"><MessageCircle className="size-4" /></button>
-                    {canCreate && <button onClick={() => deleteAssessment(a)} title="Delete" className="p-1.5 rounded-md hover:bg-muted text-danger"><Trash2 className="size-4" /></button>}
+                    {canManage && <button onClick={() => setEditing(a)} title="Edit" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><Pencil className="size-4" /></button>}
+                    {canManage && <button onClick={() => deleteAssessment(a)} title="Delete" className="p-1.5 rounded-md hover:bg-muted text-danger"><Trash2 className="size-4" /></button>}
                   </div>
                 </td>
               </tr>
@@ -152,11 +154,18 @@ function AssessmentsPage() {
       </table>
 
       {open && <AssessForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["assessments-list"] }); }} />}
+      {editing && (
+        <AssessForm
+          existing={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["assessments-list"] }); }}
+        />
+      )}
       {viewing && <AssessmentViewModal a={viewing} onClose={() => setViewing(null)} />}
       {waPicker && (
         <WhatsAppPickerModal
           parents={waPicker.parents}
-          onPick={(p) => { openWhatsApp(p.whatsapp, waPicker.assessment); setWaPicker(null); }}
+          onPick={(p) => { openWhatsApp(p.whatsapp || p.phone, waPicker.assessment); setWaPicker(null); }}
           onClose={() => setWaPicker(null)}
         />
       )}
@@ -168,7 +177,7 @@ function AssessmentViewModal({ a, onClose }: { a: any; onClose: () => void }) {
   const grade = a.grade || gradeFor(Number(a.score), Number(a.max_score) || 100);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Assessment Details</h2>
           <Badge className={gradeColor(grade)}>{grade}</Badge>
@@ -197,7 +206,7 @@ function AssessmentViewModal({ a, onClose }: { a: any; onClose: () => void }) {
 function WhatsAppPickerModal({ parents, onPick, onClose }: { parents: any[]; onPick: (p: any) => void; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 max-h-[85vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">Send to which parent?</h2>
         <div className="space-y-2">
           {parents.map((p: any, i: number) => (
@@ -215,9 +224,10 @@ function WhatsAppPickerModal({ parents, onPick, onClose }: { parents: any[]; onP
   );
 }
 
-function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function AssessForm({ existing, onClose, onSaved }: { existing?: any; onClose: () => void; onSaved: () => void }) {
   const { user, activeBranch } = useAuth();
   const formBranch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
+  const isEdit = !!existing;
   const { data: students } = useQuery({ queryKey: ["assess-students", formBranch], queryFn: async () => {
       let q = supabase.from("students").select("id,first_name,last_name").eq("status","active");
       if (formBranch) q = q.eq("branch_id", formBranch);
@@ -228,7 +238,15 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       if (formBranch) q = q.eq("branch_id", formBranch);
       return (await q.throwOnError()).data ?? [];
     } });
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => existing ? {
+    student_id: existing.student_id ?? "",
+    course_id: existing.course_id ?? "",
+    title: existing.title ?? "",
+    assessment_date: existing.assessment_date ?? new Date().toISOString().slice(0, 10),
+    score: String(existing.score ?? "0"),
+    max_score: String(existing.max_score ?? "100"),
+    notes: existing.notes ?? "",
+  } : {
     student_id: "", course_id: "", title: "", assessment_date: new Date().toISOString().slice(0, 10),
     score: "0", max_score: "100", notes: "",
   });
@@ -242,14 +260,18 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         grade: gradeFor(Number(form.score), Number(form.max_score) || 100),
       };
       if (!payload.course_id) delete payload.course_id;
-      await supabase.from("assessments").insert({...payload, branch_id: formBranch, instructor_id: user?.linked_entity_id || null}).throwOnError();
+      if (isEdit) {
+        await supabase.from("assessments").update(payload).eq("id", existing.id).throwOnError();
+      } else {
+        await supabase.from("assessments").insert({...payload, branch_id: formBranch, instructor_id: user?.linked_entity_id || null}).throwOnError();
+      }
       toast.success("Saved"); onSaved();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6">
-        <h2 className="text-lg font-semibold mb-4">New Assessment</h2>
+      <div className="bg-card border border-border rounded-2xl w-full max-w-xl p-6 max-h-[85vh] overflow-y-auto">
+        <h2 className="text-lg font-semibold mb-4">{isEdit ? "Edit Assessment" : "New Assessment"}</h2>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Student *" className="sm:col-span-2">
             <select value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })} className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm">
@@ -272,7 +294,7 @@ function AssessForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         <p className="text-xs text-muted-foreground mt-4">* Required</p>
         <div className="flex justify-end gap-2 mt-2">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">Save</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">{isEdit ? "Save Changes" : "Save"}</button>
         </div>
       </div>
     </div>
