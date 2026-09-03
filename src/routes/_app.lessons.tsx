@@ -772,7 +772,7 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
     if (!form.student_id) { toast.error("Select a student"); return; }
     setSaving(true);
     try {
-      const payload = { ...form, branch_id: formBranch, created_by: user?.id,
+      const payload = { ...form, branch_id: formBranch,
         attendance_sessions: Number(form.attendance_sessions), attendance_present: Number(form.attendance_present),
         course_id: form.course_id || null, instructor_id: form.instructor_id || null };
       let reportId = initial?.id;
