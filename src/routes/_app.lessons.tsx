@@ -543,17 +543,18 @@ function LessonPlanForm({ initial, onClose, onSaved }: { initial: any; onClose: 
 
 /* ── PROGRESS REPORTS ── */
 function ProgressReportsTab() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
+  const branch = user?.role === "super_admin" ? activeBranch : user?.branch_id ?? "";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [preview, setPreview] = useState<any>(null);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["progress-reports", user?.branch_id],
+    queryKey: ["progress-reports", branch],
     queryFn: async () => (await supabase.from("student_progress_reports")
       .select("*,students(first_name,last_name,admission_number),courses(name),instructors(first_name,last_name)")
-      .eq("branch_id", user?.branch_id ?? "")
+      .eq("branch_id", branch ?? "")
       .order("report_date", { ascending: false }).throwOnError()).data ?? [],
   });
 
