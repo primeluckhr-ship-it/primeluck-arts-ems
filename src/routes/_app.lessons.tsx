@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
-import { Plus, BookOpen, Share2, MessageCircle, Calendar, Sparkles, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, BookOpen, Share2, MessageCircle, Calendar, Sparkles, Loader2, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Field, Input } from "./_app.students";
@@ -584,6 +584,10 @@ function ProgressReportsTab() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge className={GRADE_COLORS[r.overall_grade] ?? ""}>{r.overall_grade}</Badge>
+                <button onClick={() => { setEditing(r); setOpen(true); }} title="Edit"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-muted text-muted-foreground border border-border hover:bg-muted/70 hover:text-foreground">
+                  <Pencil className="size-3"/>Edit
+                </button>
                 <button onClick={() => setPreview(r)} title="Preview & Share"
                   className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20">
                   <Share2 className="size-3"/>Share
