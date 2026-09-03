@@ -41,9 +41,22 @@ function buildWhatsappMessage(a: any): string {
   return `*${schoolName} — Assessment Result*\n\n👤 *Student:* ${a.students?.first_name} ${a.students?.last_name}\n📚 *Course:* ${a.courses?.name ?? "—"}\n📝 *Assessment:* ${a.title}\n📅 *Date:* ${dateStr}\n\n📊 *Score:* ${a.score}/${a.max_score}\n🏅 *Grade:* ${grade}\n${notesLine}\n_${schoolName}_`;
 }
 
+// Normalizes to Kenyan international format for wa.me links.
+// wa.me requires the full country code with no leading 0 — a locally-typed
+// number like "0712345678" or "0712 345 678" opens WhatsApp with no
+// recognizable chat target, which just lands on the generic app/home screen.
+function normalizeKenyanNumber(raw: string): string {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("254")) return digits;         // already international, e.g. 254712345678
+  if (digits.startsWith("0")) return "254" + digits.slice(1); // local format, e.g. 0712345678
+  if (digits.length === 9) return "254" + digits;       // missing both 0 and 254, e.g. 712345678
+  return digits; // anything else (e.g. a different country's full number) — leave as typed
+}
+
 function openWhatsApp(waNumber: string, a: any) {
-  const digits = (waNumber ?? "").replace(/\D/g, "");
-  if (!digits) { toast.error("Invalid WhatsApp number saved for this contact."); return; }
+  const digits = normalizeKenyanNumber(waNumber);
+  if (!digits || digits.length < 10) { toast.error("Invalid WhatsApp number — check the digits and try again."); return; }
   const msg = buildWhatsappMessage(a);
   window.open(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`, "_blank");
 }
