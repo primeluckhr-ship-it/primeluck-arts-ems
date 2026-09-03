@@ -56,6 +56,7 @@ function AssessmentsPage() {
   const [editing, setEditing] = useState<any>(null);
   const [viewing, setViewing] = useState<any>(null);
   const [waPicker, setWaPicker] = useState<{ assessment: any; parents: any[] } | null>(null);
+  const [manualEntry, setManualEntry] = useState<{ assessment: any; parentToUpdate: { parent_id: string; first_name: string } | null } | null>(null);
 
   const scopedIds = useQuery({
     queryKey: ["assess-scope", user?.id],
@@ -91,18 +92,28 @@ function AssessmentsPage() {
     try {
       const { data: links, error } = await supabase
         .from("student_parents")
-        .select("is_primary,parents(first_name,whatsapp,phone,relationship)")
+        .select("parent_id,is_primary,parents(first_name,whatsapp,phone,relationship)")
         .eq("student_id", a.student_id);
       if (error) throw error;
       const contacts = (links ?? [])
         .map((l: any) => l.parents)
         .filter((p: any) => p?.whatsapp || p?.phone);
-      if (!contacts.length) { toast.error("No phone or WhatsApp contact saved for this student's parent."); return; }
       if (contacts.length === 1) {
         openWhatsApp(contacts[0].whatsapp || contacts[0].phone, a);
-      } else {
-        setWaPicker({ assessment: a, parents: contacts });
+        return;
       }
+      if (contacts.length > 1) {
+        setWaPicker({ assessment: a, parents: contacts });
+        return;
+      }
+      // No number on file for any linked parent — let the user enter one on the spot
+      const primaryLink = (links ?? []).find((l: any) => l.is_primary) ?? (links ?? [])[0];
+      setManualEntry({
+        assessment: a,
+        parentToUpdate: primaryLink
+          ? { parent_id: primaryLink.parent_id, first_name: (primaryLink.parents as any)?.first_name ?? "this parent" }
+          : null,
+      });
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -169,6 +180,13 @@ function AssessmentsPage() {
           onClose={() => setWaPicker(null)}
         />
       )}
+      {manualEntry && (
+        <ManualWhatsAppModal
+          assessment={manualEntry.assessment}
+          parentToUpdate={manualEntry.parentToUpdate}
+          onClose={() => setManualEntry(null)}
+        />
+      )}
     </PageCard>
   );
 }
@@ -218,6 +236,58 @@ function WhatsAppPickerModal({ parents, onPick, onClose }: { parents: any[]; onP
         </div>
         <div className="flex justify-end mt-4">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ManualWhatsAppModal({ assessment, parentToUpdate, onClose }: {
+  assessment: any;
+  parentToUpdate: { parent_id: string; first_name: string } | null;
+  onClose: () => void;
+}) {
+  const [number, setNumber] = useState("");
+  const [saveIt, setSaveIt] = useState(!!parentToUpdate);
+  const [sending, setSending] = useState(false);
+
+  async function send() {
+    const digits = number.replace(/\D/g, "");
+    if (!digits) { toast.error("Enter a valid phone number"); return; }
+    setSending(true);
+    try {
+      if (saveIt && parentToUpdate) {
+        const { error } = await supabase.from("parents").update({ whatsapp: number.trim() }).eq("id", parentToUpdate.parent_id);
+        if (error) {
+          toast.error("Sent, but couldn't save the number: " + error.message);
+        } else {
+          toast.success(`Saved to ${parentToUpdate.first_name}'s contact for next time`);
+        }
+      }
+      openWhatsApp(number, assessment);
+      onClose();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 max-h-[85vh] overflow-y-auto">
+        <h2 className="text-lg font-semibold mb-1">No number on file</h2>
+        <p className="text-xs text-muted-foreground mb-4">Enter a phone/WhatsApp number to send this assessment now.</p>
+        <Field label="Phone / WhatsApp number">
+          <Input type="tel" value={number} onChange={setNumber} placeholder="e.g. 0712 345 678" />
+        </Field>
+        {parentToUpdate && (
+          <label className="flex items-center gap-2 text-sm mt-3 cursor-pointer">
+            <input type="checkbox" checked={saveIt} onChange={(e) => setSaveIt(e.target.checked)} className="size-4 accent-accent" />
+            Save this number to {parentToUpdate.first_name}'s contact for next time
+          </label>
+        )}
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-muted">Cancel</button>
+          <button onClick={send} disabled={sending} className="px-4 py-2 text-sm rounded-md bg-accent text-accent-foreground font-medium disabled:opacity-50">Send</button>
         </div>
       </div>
     </div>
