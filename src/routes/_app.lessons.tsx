@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { PageCard, Badge } from "@/components/app-shell";
@@ -757,16 +757,26 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
   const { data: instructors } = useQuery({ queryKey:["instructors-active"], queryFn: async () => (await supabase.from("instructors").select("id,first_name,last_name").order("first_name").throwOnError()).data ?? [] });
 
   // Auto-fill attendance from DB when student+course selected
-  async function autoFill() {
-    if (!form.student_id || !form.course_id) { toast.error("Select student and course first"); return; }
+  async function autoFill(silent = false) {
+    if (!form.student_id || !form.course_id) { if (!silent) toast.error("Select student and course first"); return; }
     const { data: attn } = await supabase.from("attendance_records")
       .select("status").eq("student_id", form.student_id)
       .in("session_id", (await supabase.from("sessions").select("id").eq("course_id", form.course_id)).data?.map((s:any)=>s.id) ?? []);
     const total = attn?.length ?? 0;
     const present = attn?.filter((a:any) => a.status === "present").length ?? 0;
     setForm(f => ({ ...f, attendance_sessions: total, attendance_present: present }));
-    toast.success(`Auto-filled: ${present}/${total} sessions`);
+    if (!silent) toast.success(`Auto-filled: ${present}/${total} sessions`);
   }
+
+  // For a NEW report, auto-fill attendance as soon as both student and course are picked.
+  // Skipped when editing an existing report so we don't silently overwrite a value the
+  // instructor may have hand-adjusted; the "Auto-fill from records" button still works there.
+  useEffect(() => {
+    if (!initial && form.student_id && form.course_id) {
+      autoFill(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.student_id, form.course_id]);
 
   async function save() {
     if (!form.student_id) { toast.error("Select a student"); return; }
@@ -830,7 +840,7 @@ function ReportForm({ initial, onClose, onSaved }: { initial: any; onClose: () =
           <div className="sm:col-span-2">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Attendance</span>
-              <button onClick={autoFill} className="text-xs text-accent hover:underline">Auto-fill from records</button>
+              <button onClick={() => autoFill()} className="text-xs text-accent hover:underline">Auto-fill from records</button>
             </div>
             <div className="flex gap-2">
               <div className="flex-1">
